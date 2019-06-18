@@ -1,0 +1,12 @@
+Package: mdessence
+Title: Sensitivity analysis for multi-dimensional scaling
+Version: 0.0.0.9000
+Authors@R: person("Julia", "Fukuyama", email = "julia.fukuyama@gmail.com", role = c("aut", "cre"))
+Description: Sensitivity analysis for MDS
+Depends: R (>= 3.5.1)
+License: AGPL-3
+Encoding: UTF-8
+LazyData: true
+Suggests: 
+    testthat
+RoxygenNote: 6.1.1

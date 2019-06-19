@@ -50,6 +50,7 @@ make_mds_matrices <- function(Y, dist_fn) {
     Beig$vectors = Beig$vectors[,1:(n-1)]
     Beig$values = Beig$values[1:(n-1)]
     X = Beig$vectors %*% diag(sqrt(Beig$values))
+    colnames(X) = paste("Axis", 1:ncol(X), sep = "")
     out = list()
     out$d2 = diag(B)
     out$B = B
@@ -146,7 +147,7 @@ minkowski_dist_deriv <- function(x, y, p) {
 #'
 #' @return A p-vector giving the gradient.
 #' @export
-wuf_dist_deriv <- function(x, y, A) {
+wuf_dist_deriv <- function(x, y, A, L) {
     sy = sum(y)
     sx = sum(x)
     py = y / sy
@@ -155,7 +156,7 @@ wuf_dist_deriv <- function(x, y, A) {
     bx = px %*% A
     bp_deriv = as.vector((1 - by)) / sy
     signs = ifelse(by > bx, 1, -1)
-    grad = A %*% (bp_deriv * signs)
+    grad = A %*% (L * (bp_deriv * signs))
     return(grad)
 }
 
@@ -168,8 +169,8 @@ wuf_dist_deriv <- function(x, y, A) {
 #' @return An n x n distance matrix, with element i,j giving the
 #' weighted Unifrac distance between X[i,] and X[j,].
 #' @export
-wuf_dist <- function(X, A) {
-    bp_matrix = X %*% A
+wuf_dist <- function(X, A, L) {
+    bp_matrix = X %*% sweep(A, MARGIN = 2, STATS = L, FUN = "*")
     return(dist(bp_matrix, method = "manhattan"))
 }
 

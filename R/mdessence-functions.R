@@ -82,7 +82,19 @@ make_dist_fns <- function(dist_fn, dist_deriv) {
     } else if(dist_fn == "maximum") {
         dist_fn = function(x) dist(x, method = "maximum")
         return(list(dist_fn = dist_fn, dist_deriv = maximum_dist_deriv))
-    } else {
+    } else if(dist_fn == "jaccard") {
+        dist_fn = function(x) {
+            d = matrix(0, nrow = nrow(x), ncol = nrow(x))
+            for(i in 1:(nrow(x) - 1)) {
+                for(j in (i+1):nrow(x)) {
+                    d[i,j] = jaccard_dis(x[i,], x[j,])
+                }
+            }
+            d = d + t(d)
+            return(d)
+        }
+        return(list(dist_fn = dist_fn, dist_deriv = jaccard_deriv))
+    }  else {
         stop("Unsupported distance")
     }
 }
@@ -173,6 +185,47 @@ wuf_dist <- function(X, A, L) {
     bp_matrix = X %*% sweep(A, MARGIN = 2, STATS = L, FUN = "*")
     return(dist(bp_matrix, method = "manhattan"))
 }
+
+#' Derivative for Jaccard distance
+#'
+#' @param x
+#' @param y
+#' @param delta_min
+#' @param positive
+#'
+#' @return If x and y each have length p, the function returns a
+#' p-vector with jth element equal to
+#' \frac{delta_min}{rho} (d^2(x, y)- d^2(x, y + rho e_k))
+jaccard_deriv <- function(x, y, delta_min = 1, positive = TRUE) {
+    if(positive) {
+        rho = ifelse(y == 0, 1, Inf)
+    } else {
+        rho = ifelse(y == 0, Inf, y)
+    }
+    dxy = jaccard_dis(x, y)^2
+    deriv = sapply(seq_along(y), function(i) {
+        if(rho[i] == Inf) return(0)
+        y_pert = y
+        if(positive) {
+            y_pert[i] = y_pert[i] + rho[i]
+        } else {
+            y_pert[i] = y_pert[i] - rho[i]
+        }
+        return(delta_min * rho[i]^(-1) * (dxy - jaccard_dis(x,y_pert)^2))
+    })
+    return(deriv)
+}
+
+jaccard_dis <- function(x, y) {
+    a = sum(x > 0 & y > 0)
+    b = sum(x > 0 & y == 0)
+    c = sum(x == 0 & y > 0)
+    if(a + b + c == 0) {
+        return(0)
+    }
+    return(1 - a / (a + b + c))
+}
+
 
 #' Plots a sensitivity biplot
 #'

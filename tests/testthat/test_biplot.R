@@ -15,6 +15,7 @@ context("Distance function creation")
 euc_dist_fns = make_dist_fns(dist_fn = "euclidean", dist_deriv = NULL)
 manhattan_dist_fns = make_dist_fns(dist_fn = "manhattan", dist_deriv = NULL)
 max_dist_fns = make_dist_fns(dist_fn = "manhattan", dist_deriv = NULL)
+jaccard_dist_fns = make_dist_fns(dist_fn = "jaccard", dist_deriv = NULL)
 test_that("make_dist_fns gives correct type of output", {
     expect_equal(typeof(euc_dist_fns), "list")
     expect_equal(length(euc_dist_fns), 2)
@@ -28,6 +29,11 @@ test_that("make_dist_fns gives correct type of output", {
     expect_equal(length(max_dist_fns), 2)
     expect_equal(typeof(max_dist_fns$dist_fn), "closure")
     expect_equal(typeof(max_dist_fns$dist_deriv), "closure")
+    expect_equal(typeof(jaccard_dist_fns), "list")
+    expect_equal(length(jaccard_dist_fns), 2)
+    expect_equal(typeof(jaccard_dist_fns$dist_fn), "closure")
+    expect_equal(typeof(jaccard_dist_fns$dist_deriv), "closure")
+
 })
 
 
@@ -81,7 +87,36 @@ test_that("Biplot data frame made correctly", {
     ## axes for
     expect_equal(nrow(biplot_sub_df),
                  ncol(Y) * length(sample_subset) + nrow(Y) - length(sample_subset))
-    expect_equal(subset(biplot_sub_df, sample == 1), subset(biplot_df, sample == 1))
+#    expect_equal(subset(biplot_sub_df, sample == 1), subset(biplot_df, sample == 1))
     expect_equal(matrix(subset(biplot_sub_df, sample == 5)),
                  matrix(subset(biplot_df, sample == 5)))
+})
+
+context("Discrete distance tests")
+test_that("Jaccard computations are correct", {
+    expect_equal(jaccard_dis(c(1,1), c(3,4)), 0)
+    expect_equal(jaccard_dis(c(0,0), c(0,0)), 0)
+    expect_equal(jaccard_dis(c(1,1), c(0,4)), .5)
+})
+test_that("Derivative function for categorical data works", {
+    ## output is of the right size
+    expect_equal(length(jaccard_deriv(x, y)), length(y))
+    ## derivative in positive direction is zero if the coordinate is non-zero
+    expect_equal(jaccard_deriv(c(0,1), c(3,4), delta_min = 1, positive = TRUE), c(0,0))
+    ## derivative in the negative direction is non-zero if the coordinate is non-zero
+    expect_true(all(jaccard_deriv(c(0,1), c(3,4), delta_min = 1, positive = FALSE) != 0))
+    ## derivative in the negative direction is zero if the coordinate is zero
+    expect_true(all(jaccard_deriv(c(0,1), c(0,0), delta_min = 1, positive = FALSE) == 0))
+}
+)
+
+Y_count = matrix(rpois(30, lambda = 2), nrow = 6, ncol = 5)
+mds_matrices_count = make_mds_matrices(Y_count, jaccard_dist_fns$dist_fn)
+sensitivity_output_count = compute_sensitivity(mds_matrices_count,
+    jaccard_dist_fns, k = 2, samples = 1:nrow(Y_count))
+test_that("Sensitivity computations on categorical data work", {
+    ## check that things are the right size
+    expect_equal(length(sensitivity_output), nrow(Y_count))
+    expect_equal(nrow(sensitivity_output[[1]]), ncol(Y_count))
+    expect_equal(ncol(sensitivity_output[[1]]), 2)
 })

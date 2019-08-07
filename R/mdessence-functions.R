@@ -270,11 +270,11 @@ uf_sensitivity_computations <- function(X, A, L) {
     for(i in 1:nrow(sample_species_combinations)) {
         sample = as.numeric(sample_species_combinations[i,1])
         species = as.numeric(sample_species_combinations[i,2])
-        d = as.logical(A_lgc[,species]) & !as.logical(A_lgc %*% X_lgc[sample,])
+        d = as.logical(A_lgc[,species]) & !as.logical(A_lgc %&% X_lgc[sample,])
         diagonal = Diagonal(n = nrow(A), x = d)
-        sample_sensitivity_indicators[[sample]][[species]] = diagonal %*% A != 0
+        sample_sensitivity_indicators[[sample]][[species]] = drop0(diagonal %&% A_lgc)
     }
-    uf_distances = dist(sweep((X_lgc %*% Matrix::t(A_lgc) > 0), MARGIN = 2, STATS = L, FUN = "*"), "manhattan") / sum(L)
+    uf_distances = dist(sweep((X_lgc %&% Matrix::t(A_lgc)), MARGIN = 2, STATS = L, FUN = "*"), "manhattan") / sum(L)
     return(list(
         branch_ancestry_list = branch_ancestry_list,
         sample_sensitivity_indicators = sample_sensitivity_indicators,
@@ -337,9 +337,9 @@ delta_from_A_sens <- function(uf_cache, X, i, j, k) {
     x_j_pert = X[j,]
     x_j_pert[k] = X[j,k] + 1
     A_sens = uf_cache$sample_sensitivity_indicators[[j]][[k]]
-    A_sens_x_i = A_sens %*% X[i,]
-    A_sens_x_j = A_sens %*% X[j,]
-    A_sens_x_j_pert = A_sens %*% x_j_pert
+    A_sens_x_i = A_sens %&% X[i,]
+    A_sens_x_j = A_sens %&% X[j,]
+    A_sens_x_j_pert = A_sens %&% x_j_pert
     d1 = sum(abs((A_sens_x_i > 0) - (A_sens_x_j > 0)) * uf_cache$L)
     d2 = sum(abs((A_sens_x_i> 0) - (A_sens_x_j_pert > 0)) * uf_cache$L)
     (d2 - d1) / sum(uf_cache$T)

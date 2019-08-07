@@ -2,6 +2,10 @@
 
 export(interactiveBiplot)
 export(sensitivity_biplot)
+export(uf_dist)
+export(uf_dist_deriv)
+export(uf_sensitivity)
+export(uf_sensitivity_computations)
 export(wuf_dist)
 export(wuf_dist_deriv)
 import(shiny)

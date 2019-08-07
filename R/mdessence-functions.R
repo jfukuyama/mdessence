@@ -186,6 +186,215 @@ wuf_dist <- function(X, A, L) {
     return(dist(bp_matrix, method = "manhattan"))
 }
 
+#' Unweighted Unifrac distance
+#'
+#' @param X A n x p matrix, n samples, p taxa.
+#' @param A A p x B marix, A_{ij} = 1 indicating that taxon i descends
+#' from branch j.
+#' @param L A vector giving branch lengths.
+#'
+#' @return An n x n distance matrix, with element i,j giving the
+#' weighted Unifrac distance between X[i,] and X[j,].
+#' @export
+uf_dist <- function(X, A, L) {
+    bp_matrix = X %*% A
+    br_ind_matrix = bp_matrix > 0
+    br_ind_matrix_scaled = sweep(br_ind_matrix, MARGIN = 2, STATS = L, FUN = "*")
+    return(dist(br_ind_matrix_scaled, method = "manhattan") / sum(L))
+}
+
+#' Generalized gradient for unweighted Unifrac
+#'
+#' If d_{x,T}(y) denotes the unweighted Unifrac distance between x and y
+#' with tree T, computes the generalized gradient of d_{x,T} evaluated at y.
+#' @param x A p-vector.
+#' @param y A p-vector.
+#' @param A A p x B matrix, with A_{ij} = 1 indicating that taxon i
+#' descends from branch j.
+#' @param L A vector of branch lengths.
+#' @param delta_min
+#' @param positive
+#'
+#' @return A p-vector giving the gradient.
+#' @export
+uf_dist_deriv <- function(x, y, A, L, delta_min = 1, positive = TRUE,
+                          return_dist_difference = FALSE) {
+    y = as.vector(y)
+    x = as.vector(x)
+    if(positive) {
+        rho = ifelse(y == 0, 1, Inf)
+    } else {
+        rho = ifelse(y == 0, Inf, y)
+    }
+    dxy = as.numeric(uf_dist(rbind(x, y), A, L))
+    deriv = sapply(seq_along(y), function(i) {
+        if(rho[i] == Inf) return(0)
+        if(positive) {
+            delta = uf_delta(x, y, A, L, i, rho = rho[i])
+        } else {
+            delta = uf_delta(x, y, A, L, i, rho = -rho[i])
+        }
+        if(return_dist_difference) {
+            return((-1) * delta * (delta + 2 * dxy))
+        } else {
+            return(delta_min * rho[i]^(-1) * (-1) * delta * (delta + 2 * dxy))
+        }
+    })
+    return(deriv)
+}
+
+
+#'
+#'
+#' @param X A samples by species matrix
+#' @param A The branches by species ancestry matrix
+#' @param L Branch-length vector
+#'
+#' @export
+uf_sensitivity_computations <- function(X, A, L) {
+    A_lgc = A != 0
+    X_lgc = as(X != 0, "lgCMatrix")
+    branch_ancestry_list = lapply(1:ncol(X), function(i) {
+        i_s_ancestors = which(A[,i] > 0)
+        return(i_s_ancestors)
+    })
+    sample_species_combinations = expand.grid(1:nrow(X), 1:ncol(X))
+    ## this is a list where sample_sensitivity_indicators[[j]][[k]]
+    ## has A^{(jk)}, the matrix indicating whether the contribution of
+    ## the bth branch to the unifrac distance between sample j and any
+    ## other sample will change if taxon k is increased
+    sample_sensitivity_indicators = list()
+    for(i in 1:nrow(X)) {
+        sample_sensitivity_indicators[[i]] = list()
+    }
+    for(i in 1:nrow(sample_species_combinations)) {
+        sample = as.numeric(sample_species_combinations[i,1])
+        species = as.numeric(sample_species_combinations[i,2])
+        d = as.logical(A_lgc[,species]) & !as.logical(A_lgc %*% X_lgc[sample,])
+        diagonal = Diagonal(n = nrow(A), x = d)
+        sample_sensitivity_indicators[[sample]][[species]] = diagonal %*% A != 0
+    }
+    uf_distances = dist(sweep((X_lgc %*% Matrix::t(A_lgc) > 0), MARGIN = 2, STATS = L, FUN = "*"), "manhattan") / sum(L)
+    return(list(
+        branch_ancestry_list = branch_ancestry_list,
+        sample_sensitivity_indicators = sample_sensitivity_indicators,
+        uf_distances = uf_distances,
+        L = L,
+        T = sum(L)
+    ))
+
+}
+
+#' Computes biplot axes around a point
+#'
+#' @param X
+#' @param sample_idx
+#' @param species_indices
+#' @param delta_min
+#' @param positive
+#' @param uf_cached The output from uf_sensitivity_computations
+#' @param mds_matrices The output from make_mds_matrices
+#' @export
+uf_sensitivity <- function(X, sample_idx, species_indices = 1:ncol(X),
+                           delta_min = 1, positive = TRUE, uf_cached,
+                           mds_matrices, n_axes = 2) {
+    if(class(X) != "Matrix") {
+        X = as(X, "Matrix")
+    }
+    generalized_gradients =
+        make_uf_generalized_gradients(X, sample_idx, species_indices,
+                                      delta_min, positive = positive,
+                                      uf_cached = uf_cached)
+    biplot_axes =
+        t(.5 * diag(mds_matrices$Lambda[1:n_axes]^(-1)) %*%
+            t(mds_matrices$X[,1:n_axes,drop=FALSE]) %*% generalized_gradients)
+    return(biplot_axes)
+}
+
+
+explicit_generalized_gradients <- function(X, sample_idx, delta_min, positive, A, L) {
+    if(positive) {
+        rho = ifelse(X[sample_idx,] == 0, delta_min, Inf)
+    } else {
+        rho = -ifelse(X[sample_idx,] == 0, Inf, X[sample_idx,])
+    }
+    generalized_gradients = matrix(0, nrow(X), ncol(X))
+    for(i in 1:nrow(X)) {
+        for(k in 1:ncol(X)) {
+            x = X[i,]
+            y = X[sample_idx,]
+            y_pert = y
+            y_pert[k] = y_pert[k] + rho[k]
+            dxy2 = uf_dist(rbind(x, y), A, L)^2
+            dxypert2 = uf_dist(rbind(x, y_pert), A, L)^2
+            generalized_gradients[i,k] = (delta_min * rho[k]^(-1) * (dxy2 - dxypert2))
+        }
+    }
+    return(generalized_gradients)
+}
+
+delta_from_A_sens <- function(uf_cache, X, i, j, k) {
+    x_j_pert = X[j,]
+    x_j_pert[k] = X[j,k] + 1
+    A_sens = uf_cache$sample_sensitivity_indicators[[j]][[k]]
+    A_sens_x_i = A_sens %*% X[i,]
+    A_sens_x_j = A_sens %*% X[j,]
+    A_sens_x_j_pert = A_sens %*% x_j_pert
+    d1 = sum(abs((A_sens_x_i > 0) - (A_sens_x_j > 0)) * uf_cache$L)
+    d2 = sum(abs((A_sens_x_i> 0) - (A_sens_x_j_pert > 0)) * uf_cache$L)
+    (d2 - d1) / sum(uf_cache$T)
+}
+
+
+make_uf_generalized_gradients <- function(X, sample_idx, species_indices,
+                                          delta_min, positive, uf_cached) {
+    if(positive) {
+        rho = ifelse(X[sample_idx,] == 0, delta_min, Inf)
+    } else {
+        rho = -ifelse(X[sample_idx,]  == 0, Inf, X[sample_idx,])
+    }
+    sample_sensitivity_matrices = uf_cached$sample_sensitivity_matrices
+    uf_distances = as.matrix(uf_cached$uf_distances)
+    generalized_gradients = matrix(0, nrow(X), length(species_indices))
+    for(i in 1:nrow(X)) {
+        for(k in 1:length(species_indices)) {
+            species_idx = species_indices[k]
+            if(rho[species_idx] == Inf) {
+                generalized_gradients[i, k] = 0
+            } else {
+                dxy = uf_distances[i, sample_idx]
+                delta = delta_from_A_sens(uf_cache, X, i, sample_idx, species_idx)
+                generalized_gradients[i, species_idx] =
+                    delta_min / rho[species_idx] * (-1) * delta * (delta + 2 * dxy)
+            }
+        }
+    }
+    return(generalized_gradients)
+}
+#' Computes delta for unifrac
+#'
+#' Computes d(x,y) - d(x,y + rho e_i) for d the unweighted Unifrac
+#' distance.
+#'
+#' @param x
+#' @param y
+#' @param A
+#' @param L Branch legths
+#' @param i
+#' @param rho
+#'
+uf_delta <- function(x, y, A, L, i, rho) {
+    i_s_ancestors = which(A[i,] > 0)
+    A_sub = A[,i_s_ancestors,drop=FALSE]
+    L_sub = L[i_s_ancestors]
+    y_pert = y
+    y_pert[i] = y_pert[i] + rho
+    original = sum(abs(((t(x) %*% A_sub) > 0) - ((t(y) %*% A_sub) > 0)) * L_sub)
+    ##new = sum(abs(((t(x) %*% A_sub) > 0) - (t(y_pert) %*% A_sub) > 0) * L_sub)
+    new = sum(abs(((t(x) %*% A_sub) > 0) - ((t(y_pert) %*% A_sub) > 0)) * L_sub)
+    delta = (original - new) / sum(L)
+}
+
 #' Derivative for Jaccard distance
 #'
 #' @param x
@@ -225,7 +434,6 @@ jaccard_dis <- function(x, y) {
     }
     return(1 - a / (a + b + c))
 }
-
 
 #' Plots a sensitivity biplot
 #'

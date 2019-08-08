@@ -9,4 +9,6 @@ Encoding: UTF-8
 LazyData: true
 Suggests: 
     testthat
+Imports:
+    Matrix
 RoxygenNote: 6.1.1

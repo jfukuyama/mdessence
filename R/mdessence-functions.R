@@ -258,6 +258,10 @@ uf_sensitivity_computations <- function(X, A, L) {
         i_s_ancestors = which(A[,i] > 0)
         return(i_s_ancestors)
     })
+    sample_indicator_list = list()
+    for(i in 1:nrow(X)) {
+        sample_indicator_list[[i]] = Matrix::t(X_lgc[i,,drop=FALSE])
+    }
     sample_species_combinations = expand.grid(1:nrow(X), 1:ncol(X))
     ## this is a list where sample_sensitivity_indicators[[j]][[k]]
     ## has A^{(jk)}, the matrix indicating whether the contribution of
@@ -272,10 +276,11 @@ uf_sensitivity_computations <- function(X, A, L) {
         species = as.numeric(sample_species_combinations[i,2])
         d = as.logical(A_lgc[,species]) & !as.logical(A_lgc %*% X_lgc[sample,])
         diagonal = Diagonal(n = nrow(A), x = d)
-        sample_sensitivity_indicators[[sample]][[species]] = diagonal %*% A != 0
+        sample_sensitivity_indicators[[sample]][[species]] = drop0(diagonal %*% A != 0)
     }
     uf_distances = dist(sweep((X_lgc %*% Matrix::t(A_lgc) > 0), MARGIN = 2, STATS = L, FUN = "*"), "manhattan") / sum(L)
     return(list(
+        sample_indicator_list = sample_indicator_list,
         branch_ancestry_list = branch_ancestry_list,
         sample_sensitivity_indicators = sample_sensitivity_indicators,
         uf_distances = uf_distances,
@@ -333,28 +338,57 @@ explicit_generalized_gradients <- function(X, sample_idx, delta_min, positive, A
     return(generalized_gradients)
 }
 
-delta_from_A_sens <- function(uf_cache, X, i, j, k) {
-    x_j_pert = X[j,]
-    x_j_pert[k] = X[j,k] + 1
+
+#' @param Xt A species x samples matrix
+delta_from_A_sens <- function(uf_cache, Xt, i, j, k) {
+    x_j = x_j_pert = uf_cache$sample_indicator_list[[j]]
+    ##x_j_pert[k,1] = TRUE
+    if(all(x_j_pert@i != (k-1))) {
+        x_j_pert@x = rep(TRUE, length(x_j_pert@x) + 1)
+        x_j_pert@p[2] = x_j_pert@p[2] + 1L
+        x_j_pert@i = sort(c(x_j_pert@i, as.integer(k-1)))
+    }
     A_sens = uf_cache$sample_sensitivity_indicators[[j]][[k]]
-    A_sens_x_i = A_sens %*% X[i,]
-    A_sens_x_j = A_sens %*% X[j,]
+    A_sens_x_i = A_sens %*% uf_cache$sample_indicator_list[[i]]
+    A_sens_x_j = A_sens %*% x_j
     A_sens_x_j_pert = A_sens %*% x_j_pert
-    d1 = sum(abs((A_sens_x_i > 0) - (A_sens_x_j > 0)) * uf_cache$L)
-    d2 = sum(abs((A_sens_x_i> 0) - (A_sens_x_j_pert > 0)) * uf_cache$L)
+    #if(any(A_sens_x_i@x == 0))
+    #    browser()
+    #if(any(A_sens_x_j@x == 0))
+    #    browser()
+    #if(any(A_sens_x_j_pert@x == 0))
+    #       browser
+    ##d1 = sum(abs((A_sens_x_i > 0) - (A_sens_x_j > 0)) * uf_cache$L)
+    ##d2 = sum(abs((A_sens_x_i> 0) - (A_sens_x_j_pert > 0)) * uf_cache$L)
+    d1 = mdessence:::uf_num_from_indicators(A_sens_x_i, A_sens_x_j, uf_cache$L)
+    d2 = mdessence:::uf_num_from_indicators(A_sens_x_i, A_sens_x_j_pert, uf_cache$L)
     (d2 - d1) / sum(uf_cache$T)
+}
+
+sym_diff <- function(a,b) unique(c(setdiff(a,b), setdiff(b,a)))
+
+uf_num_from_indicators <- function(sm1, sm2, L) {
+    #sm1 = as(sm1, "dgTMatrix")
+    #sm2 = as(sm2, "dgTMatrix")
+    #sm1 = drop0(sm1)
+    #sm2 = drop0(sm2)
+    sum_indices = sym_diff(sm1@i, sm2@i)
+    ## +1 because Matrix uses zero indexing
+    sum(L[sum_indices + 1])
 }
 
 
 make_uf_generalized_gradients <- function(X, sample_idx, species_indices,
                                           delta_min, positive, uf_cached) {
+    X_lgc = as(X != 0, "lgTMatrix")
     if(positive) {
-        rho = ifelse(X[sample_idx,] == 0, delta_min, Inf)
+        rho = ifelse(!X_lgc[sample_idx,], delta_min, Inf)
     } else {
-        rho = -ifelse(X[sample_idx,]  == 0, Inf, X[sample_idx,])
+        rho = -ifelse(!X_lgc[sample_idx,], Inf, X[sample_idx,])
     }
     sample_sensitivity_matrices = uf_cached$sample_sensitivity_matrices
     uf_distances = as.matrix(uf_cached$uf_distances)
+    Xt_lgc = Matrix::t(X_lgc)
     generalized_gradients = matrix(0, nrow(X), length(species_indices))
     for(i in 1:nrow(X)) {
         for(k in 1:length(species_indices)) {
@@ -363,7 +397,7 @@ make_uf_generalized_gradients <- function(X, sample_idx, species_indices,
                 generalized_gradients[i, k] = 0
             } else {
                 dxy = uf_distances[i, sample_idx]
-                delta = delta_from_A_sens(uf_cache, X, i, sample_idx, species_idx)
+                delta = delta_from_A_sens(uf_cache, Xt_lgc, i, sample_idx, species_idx)
                 generalized_gradients[i, species_idx] =
                     delta_min / rho[species_idx] * (-1) * delta * (delta + 2 * dxy)
             }

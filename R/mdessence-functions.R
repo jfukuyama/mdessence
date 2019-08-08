@@ -34,7 +34,14 @@ compute_sensitivity <- function(mds_matrices, dist_fns, k, samples) {
 #' @param Y A samples x variables data matrix
 #' @param dist_fn A function that computes the distances between the rows of Y.
 #'
-#' @return 
+#' @return A list, containing
+#' - delta: Matrix of squared distances.
+#' - A: -.5 delta
+#' - B: Row- and column-centered A
+#' - d2: The diagonal elements of B
+#' - X: The embeddings of the samples in the MDS space.
+#' - Lambda: The eigenvalues of B.
+#' - Y: The original data.
 make_mds_matrices <- function(Y, dist_fn) {
     n = nrow(Y)
     dist_output = dist_fn(Y)
@@ -102,8 +109,8 @@ make_dist_fns <- function(dist_fn, dist_deriv) {
 
 #' Partial gradient for Euclidean distance
 #'
-#' @param x
-#' @param y
+#' @param x A p-vector.
+#' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
 #' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
@@ -117,8 +124,8 @@ euclidean_dist_deriv <- function(x, y) {
 
 #' Partial gradient for manhattan distance
 #'
-#' @param x
-#' @param y
+#' @param x A p-vector.
+#' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
 #' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
@@ -131,8 +138,8 @@ manhattan_dist_deriv <- function(x, y) {
 
 #' Partial gradient for max distance
 #'
-#' @param x
-#' @param y
+#' @param x A p-vector.
+#' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
 #' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
@@ -212,8 +219,8 @@ uf_dist <- function(X, A, L) {
 #' @param A A p x B matrix, with A_{ij} = 1 indicating that taxon i
 #' descends from branch j.
 #' @param L A vector of branch lengths.
-#' @param delta_min
-#' @param positive
+#' @param delta_min Smallest perturbation.
+#' @param positive Logical, positive perturbation?
 #'
 #' @return A p-vector giving the gradient.
 #' @export
@@ -244,20 +251,21 @@ uf_dist_deriv <- function(x, y, A, L, delta_min = 1, positive = TRUE,
 }
 
 
+#' Pre-computations for unifrac biplots
 #'
+#' Saves matrices that we need to access many times when computing the
+#' unifrac biplot axes.
 #'
 #' @param X A samples by species matrix
 #' @param A The branches by species ancestry matrix
 #' @param L Branch-length vector
 #'
+#' @return A list, containing 
+#' 
 #' @export
 uf_sensitivity_computations <- function(X, A, L) {
     A_lgc = A != 0
     X_lgc = as(X != 0, "lgCMatrix")
-    branch_ancestry_list = lapply(1:ncol(X), function(i) {
-        i_s_ancestors = which(A[,i] > 0)
-        return(i_s_ancestors)
-    })
     sample_indicator_list = list()
     for(i in 1:nrow(X)) {
         sample_indicator_list[[i]] = Matrix::t(X_lgc[i,,drop=FALSE])
@@ -281,7 +289,6 @@ uf_sensitivity_computations <- function(X, A, L) {
     uf_distances = dist(sweep((X_lgc %*% Matrix::t(A_lgc) > 0), MARGIN = 2, STATS = L, FUN = "*"), "manhattan") / sum(L)
     return(list(
         sample_indicator_list = sample_indicator_list,
-        branch_ancestry_list = branch_ancestry_list,
         sample_sensitivity_indicators = sample_sensitivity_indicators,
         uf_distances = uf_distances,
         L = L,
@@ -292,13 +299,15 @@ uf_sensitivity_computations <- function(X, A, L) {
 
 #' Computes biplot axes around a point
 #'
-#' @param X
-#' @param sample_idx
-#' @param species_indices
-#' @param delta_min
-#' @param positive
+#' @param X A samples by species data matrix.
+#' @param sample_idx The point around which to compute biplot axes.
+#' @param species_indices The species for which to compute biplot axes.
+#' @param delta_min Minimum value for perturbation.
+#' @param positive Logical, perturbation in the positive direction?
 #' @param uf_cached The output from uf_sensitivity_computations
 #' @param mds_matrices The output from make_mds_matrices
+#'
+#' @return A species by n_axes matrix with biplot axes.
 #' @export
 uf_sensitivity <- function(X, sample_idx, species_indices = 1:ncol(X),
                            delta_min = 1, positive = TRUE, uf_cached,
@@ -338,11 +347,14 @@ explicit_generalized_gradients <- function(X, sample_idx, delta_min, positive, A
     return(generalized_gradients)
 }
 
-
-#' @param Xt A species x samples matrix
-delta_from_A_sens <- function(uf_cache, Xt, i, j, k) {
+#' Computes change in uf distance after perturbation
+#'
+#' Computes d(xi,xj+rho e_k) - d(xi,xj)
+#'
+#' @param uf_cache The output from uf_sensitivity_computations.
+delta_from_A_sens <- function(uf_cache, i, j, k) {
     x_j = x_j_pert = uf_cache$sample_indicator_list[[j]]
-    ##x_j_pert[k,1] = TRUE
+    ## next five lines should be equivalent to x_j_pert[k,1] = TRUE
     if(all(x_j_pert@i != (k-1))) {
         x_j_pert@x = rep(TRUE, length(x_j_pert@x) + 1)
         x_j_pert@p[2] = x_j_pert@p[2] + 1L
@@ -367,6 +379,16 @@ delta_from_A_sens <- function(uf_cache, Xt, i, j, k) {
 
 sym_diff <- function(a,b) unique(c(setdiff(a,b), setdiff(b,a)))
 
+#' Unifrac numerator
+#'
+#' More efficient, less transparent version of numerator computation.
+#'
+#' @param sm1 A p x 1 sparse matrix of class "dgCMatrix". Assumed to
+#' have zeros dropped.
+#' @param sm2 A p x 1 sparse matrix of class "dgCMatrix" Assumed to
+#' have zeros dropped.
+#' @param L A numeric p-vector.
+#' @return Sum of unique branch lengths.
 uf_num_from_indicators <- function(sm1, sm2, L) {
     #sm1 = as(sm1, "dgTMatrix")
     #sm2 = as(sm2, "dgTMatrix")
@@ -397,7 +419,7 @@ make_uf_generalized_gradients <- function(X, sample_idx, species_indices,
                 generalized_gradients[i, k] = 0
             } else {
                 dxy = uf_distances[i, sample_idx]
-                delta = delta_from_A_sens(uf_cache, Xt_lgc, i, sample_idx, species_idx)
+                delta = delta_from_A_sens(uf_cache, i, sample_idx, species_idx)
                 generalized_gradients[i, species_idx] =
                     delta_min / rho[species_idx] * (-1) * delta * (delta + 2 * dxy)
             }
@@ -410,13 +432,8 @@ make_uf_generalized_gradients <- function(X, sample_idx, species_indices,
 #' Computes d(x,y) - d(x,y + rho e_i) for d the unweighted Unifrac
 #' distance.
 #'
-#' @param x
-#' @param y
-#' @param A
-#' @param L Branch legths
-#' @param i
-#' @param rho
-#'
+#' @param A A species by branches ancestry matrix.
+#' @param L A branch length vector.
 uf_delta <- function(x, y, A, L, i, rho) {
     i_s_ancestors = which(A[i,] > 0)
     A_sub = A[,i_s_ancestors,drop=FALSE]
@@ -431,14 +448,14 @@ uf_delta <- function(x, y, A, L, i, rho) {
 
 #' Derivative for Jaccard distance
 #'
-#' @param x
-#' @param y
-#' @param delta_min
-#' @param positive
+#' @param x A p-vector.
+#' @param y A p-vector
+#' @param delta_min Minimum value for the perturbation.
+#' @param positive Positive perturbation?
 #'
 #' @return If x and y each have length p, the function returns a
 #' p-vector with jth element equal to
-#' \frac{delta_min}{rho} (d^2(x, y)- d^2(x, y + rho e_k))
+#' \frac{delta_min}{rho} (d^2(x, y)- d^2(x, y + rho e_j))
 jaccard_deriv <- function(x, y, delta_min = 1, positive = TRUE) {
     if(positive) {
         rho = ifelse(y == 0, 1, Inf)
@@ -474,7 +491,7 @@ jaccard_dis <- function(x, y) {
 #' @param Y A matrix or data frame with the data the distances were computed from.
 #' @param sensitivity_list A list giving the output from compute_sensitivity
 #'
-#' @return
+#' @return A plot.
 #' @export
 sensitivity_biplot <- function(Y, dist, dist_deriv = NULL, k = 2, plotting_axes = 1:2,
                                samples = 1:nrow(Y), only_df = FALSE, ...) {

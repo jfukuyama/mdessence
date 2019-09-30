@@ -12,19 +12,14 @@ compute_sensitivity <- function(mds_matrices, dist_fns, k, samples) {
     dist_matrix = mds_matrices$delta^(.5)
     biplot_list = list()
     for(j in samples) {
-        biplot_at_j = matrix(0, nrow = ncol(mds_matrices$Y), ncol = k)
-        for(k_idx in 1:k) {
-            ## TODO: check which number this should be
-            lambda = mds_matrices$Lambda[k_idx]
-            ## TODO: rename , check that we're doing the right thing
-            A = apply(mds_matrices$Y, 1, function(y) {
-                deriv = as.matrix(dist_fns$dist_deriv(y, mds_matrices$Y[j,]))
-                return(deriv)
-            })
-            M = -.5 * lambda^(-1) * sweep(A, 2, mds_matrices$X[,k_idx] * dist_matrix[,j], FUN = '*')
-            biplot_at_j[,k_idx] = rowSums(M)
-        }
-        biplot_list[[j]] = biplot_at_j
+        Ylambdainv = sweep(mds_matrices$Y[,1:k], MARGIN = 2,
+                        STATS = mds_matrices$Lambda[1:k], FUN = "/")
+        dist_to_j = dist_matrix[,j]
+        dist_jacobian = apply(mds_matrices$X, 1, function(x) {
+            -dist_fns$dist_deriv(x, mds_matrices$X[j,])
+        })
+        Jd = sweep(dist_jacobian, MARGIN = 2, STATS = dist_to_j, FUN = "*")
+        biplot_list[[j]] = Jd %*% Ylambdainv
     }
     return(biplot_list)
 }
@@ -36,32 +31,30 @@ compute_sensitivity <- function(mds_matrices, dist_fns, k, samples) {
 #'
 #' @return A list, containing
 #' - delta: Matrix of squared distances.
-#' - A: -.5 delta
-#' - B: Row- and column-centered A
+#' - jdj: Row- and column-centered -.5 * delta
 #' - d2: The diagonal elements of B
-#' - X: The embeddings of the samples in the MDS space.
+#' - Y: The embeddings of the samples in the MDS space.
 #' - Lambda: The eigenvalues of B.
-#' - Y: The original data.
-make_mds_matrices <- function(Y, dist_fn) {
-    n = nrow(Y)
-    dist_output = dist_fn(Y)
+#' - X: The original data.
+make_mds_matrices <- function(X, dist_fn) {
+    n = nrow(X)
+    dist_output = dist_fn(X)
     ## as.matrix allows us to handle the output from the 'dist'
     ## function as well as matrix-valued outputs
     ## delta is the matrix that contains the squared distances
     delta = as.matrix(dist_output)^2
     A = -.5 * delta
     ## there is a faster way to do this
-    P = diag(1, n) - n^(-1) * matrix(1, nrow = n, ncol = n)
-    B = P %*% A %*% P
-    Beig = eigen(B, symmetric = TRUE)
+    J = diag(1, n) - n^(-1) * matrix(1, nrow = n, ncol = n)
+    jdj = J %*% A %*% J
+    Beig = eigen(jdj, symmetric = TRUE)
     Beig$vectors = Beig$vectors[,1:(n-1)]
     Beig$values = Beig$values[1:(n-1)]
-    X = Beig$vectors %*% diag(sqrt(Beig$values))
-    colnames(X) = paste("Axis", 1:ncol(X), sep = "")
+    Y = Beig$vectors %*% diag(sqrt(Beig$values))
+    colnames(Y) = paste("Axis", 1:ncol(Y), sep = "")
     out = list()
-    out$d2 = diag(B)
-    out$B = B
-    out$A = A
+    out$d2 = diag(jdj)
+    out$jdj = jdj
     out$delta = delta
     out$X = X
     out$Lambda = Beig$values
@@ -493,10 +486,10 @@ jaccard_dis <- function(x, y) {
 #'
 #' @return A plot.
 #' @export
-sensitivity_biplot <- function(Y, dist, dist_deriv = NULL, k = 2, plotting_axes = 1:2,
-                               samples = 1:nrow(Y), only_df = FALSE, ...) {
+sensitivity_biplot <- function(X, dist, dist_deriv = NULL, k = 2, plotting_axes = 1:2,
+                               samples = 1:nrow(X), only_df = FALSE, ...) {
     dist_fns = make_dist_fns(dist, dist_deriv)
-    mds_matrices = make_mds_matrices(Y, dist_fns$dist_fn)
+    mds_matrices = make_mds_matrices(X, dist_fns$dist_fn)
     sensitivity_list = compute_sensitivity(mds_matrices, dist_fns, k = k, samples = samples)
     biplot_df = make_biplot_data_frame(sensitivity_list, mds_matrices,
         axes = plotting_axes, samples = samples)
@@ -510,17 +503,17 @@ sensitivity_biplot <- function(Y, dist, dist_deriv = NULL, k = 2, plotting_axes 
 }
 
 make_biplot_data_frame <- function(sensitivity_list, mds_matrices, axes = 1:2, samples) {
-    n = nrow(mds_matrices$Y)
-    p = ncol(mds_matrices$Y)
-    varnames = get_variable_names(mds_matrices$Y)
+    n = nrow(mds_matrices$X)
+    p = ncol(mds_matrices$X)
+    varnames = get_variable_names(mds_matrices$X)
     biplot_list = lapply(1:n, function(i) {
         if(i %in% samples) {
             return(make_one_sample_biplot_df(sensitivity = sensitivity_list[[i]][,axes],
-                                             center = mds_matrices$X[i,axes],
+                                             center = mds_matrices$Y[i,axes],
                                              sample = i, varnames = varnames))
 
         } else {
-            point = mds_matrices$X[i,axes]
+            point = mds_matrices$Y[i,axes]
             return(data.frame(x = point[1], y = point[2], xend = NA, yend = NA,
                               variable = NA, sample = i))
         }

@@ -539,3 +539,11 @@ make_one_sample_biplot_df <- function(sensitivity, center, sample, varnames, sca
     colnames(one_sample_df)[1:4] = c("x", "y", "xend", "yend")
     return(one_sample_df)
 }
+
+
+correlation_biplot <- function(X, dist, k = 2, plotting_axes = 1:2) {
+    mds_matrices = make_mds_matrices(X, dist)
+    biplot_axes = cor(X, mds_matrices$Y)[,plotting_axes]
+    colnames(biplot_axes) = sapply(plotting_axes, function(i) sprintf("Axis%i", i))
+    return(biplot_axes)
+}

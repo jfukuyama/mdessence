@@ -168,8 +168,8 @@ wuf_dist_deriv <- function(x, y, A, L) {
     bx = px %*% A
     bp_deriv = as.vector((1 - by)) / sy
     signs = ifelse(by > bx, 1, -1)
-    grad = A %*% (L * (bp_deriv * signs))
-    return(grad)
+    grad = A %*% as.vector((L * (bp_deriv * signs)))
+    return(as.vector(grad))
 }
 
 #' Weighted Unifrac distance
@@ -232,7 +232,7 @@ uf_dist_deriv <- function(x, y, A, L, delta_min = 1, positive = TRUE,
         if(positive) {
             delta = uf_delta(x, y, A, L, i, rho = rho[i])
         } else {
-            delta = uf_delta(x, y, A, L, i, rho = -rho[i])
+            delta = -uf_delta(x, y, A, L, i, rho = -rho[i])
         }
         if(return_dist_difference) {
             return((-1) * delta * (delta + 2 * dxy))
@@ -258,7 +258,8 @@ uf_dist_deriv <- function(x, y, A, L, delta_min = 1, positive = TRUE,
 #' @export
 uf_sensitivity_computations <- function(X, A, L) {
     A_lgc = A != 0
-    X_lgc = as(X != 0, "lgCMatrix")
+    ##X_lgc = as(X != 0, "lgCMatrix")
+    X_lgc = X != 0
     sample_indicator_list = list()
     for(i in 1:nrow(X)) {
         sample_indicator_list[[i]] = Matrix::t(X_lgc[i,,drop=FALSE])

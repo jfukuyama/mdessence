@@ -487,12 +487,12 @@ jaccard_dis <- function(x, y) {
 #' @return A plot.
 #' @export
 sensitivity_biplot <- function(X, dist, dist_deriv = NULL, k = 2, plotting_axes = 1:2,
-                               samples = 1:nrow(X), only_df = FALSE, ...) {
+                               samples = 1:nrow(X), only_df = FALSE, scale = 1,...) {
     dist_fns = make_dist_fns(dist, dist_deriv)
     mds_matrices = make_mds_matrices(X, dist_fns$dist_fn)
     sensitivity_list = compute_sensitivity(mds_matrices, dist_fns, k = k, samples = samples)
     biplot_df = make_biplot_data_frame(sensitivity_list, mds_matrices,
-        axes = plotting_axes, samples = samples)
+        axes = plotting_axes, samples = samples, scale = scale)
     if(only_df) {
         return(biplot_df)
     }
@@ -502,7 +502,7 @@ sensitivity_biplot <- function(X, dist, dist_deriv = NULL, k = 2, plotting_axes 
 
 }
 
-make_biplot_data_frame <- function(sensitivity_list, mds_matrices, axes = 1:2, samples) {
+make_biplot_data_frame <- function(sensitivity_list, mds_matrices, axes = 1:2, samples, scale) {
     n = nrow(mds_matrices$X)
     p = ncol(mds_matrices$X)
     varnames = get_variable_names(mds_matrices$X)
@@ -510,7 +510,8 @@ make_biplot_data_frame <- function(sensitivity_list, mds_matrices, axes = 1:2, s
         if(i %in% samples) {
             return(make_one_sample_biplot_df(sensitivity = sensitivity_list[[i]][,axes],
                                              center = mds_matrices$Y[i,axes],
-                                             sample = i, varnames = varnames))
+                                             sample = i, varnames = varnames,
+                                             scale = scale))
 
         } else {
             point = mds_matrices$Y[i,axes]
@@ -530,8 +531,8 @@ get_variable_names <- function(m) {
     return(colnames(m))
 }
 
-make_one_sample_biplot_df <- function(sensitivity, center, sample, varnames) {
-    endpoints = sweep(sensitivity, MARGIN = 2, STATS = center, FUN = '+')
+make_one_sample_biplot_df <- function(sensitivity, center, sample, varnames, scale) {
+    endpoints = sweep(sensitivity * scale, MARGIN = 2, STATS = center, FUN = '+')
     centers = matrix(center, nrow = nrow(sensitivity), ncol = ncol(sensitivity), byrow = TRUE)
     one_sample_df = data.frame(centers, endpoints, variable = varnames, sample = sample)
     colnames(one_sample_df)[1:4] = c("x", "y", "xend", "yend")

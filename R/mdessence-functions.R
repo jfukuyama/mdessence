@@ -1,4 +1,4 @@
-#' Sensitivity biplot
+#' Sensitivity biplot at input data points
 #'
 #' @param mds_matrices The output from make_mds_matrices.
 #' @param dist_fns The output from make_dist_fns.
@@ -8,12 +8,12 @@
 #' @return A list. The ith element of the list is a p x k matrix, and
 #' the (jl)th element of which describes the sensitivity of variable j
 #' on axis l around point i.
-compute_sensitivity <- function(mds_matrices, dist_fns, k, samples) {
+compute_sensitivity_samples <- function(mds_matrices, dist_fns, k, samples, ridge = 0) {
     dist_matrix = mds_matrices$delta^(.5)
     biplot_list = list()
+    Ylambdainv = sweep(mds_matrices$Y[,1:k], MARGIN = 2,
+                       STATS = mds_matrices$Lambda[1:k] + ridge, FUN = "/")
     for(j in samples) {
-        Ylambdainv = sweep(mds_matrices$Y[,1:k], MARGIN = 2,
-                        STATS = mds_matrices$Lambda[1:k], FUN = "/")
         dist_to_j = dist_matrix[,j]
         dist_jacobian = apply(mds_matrices$X, 1, function(x) {
             -dist_fns$dist_deriv(x, mds_matrices$X[j,])
@@ -22,6 +22,50 @@ compute_sensitivity <- function(mds_matrices, dist_fns, k, samples) {
         biplot_list[[j]] = Jd %*% Ylambdainv
     }
     return(biplot_list)
+}
+
+#' Sensitivity biplot ot new points
+#'
+#' @param mds_matrices The output from make_mds_matrices.
+#' @param dist_fns The output from make_dist_fns.
+#' @param k The number of embedding dimensions for multi-dimensional scaling. Defaults to 2.
+#' @param new_points A list with new points to compute biplot axes for.
+#' 
+#' @return A list. The ith element of the list is a p x k matrix, and
+#' the (jl)th element of which describes the sensitivity of variable j
+#' on axis l around point i.
+compute_sensitivity_new_points <- function(mds_matrices, dist_fns, k, new_points, n_random_points = NA, ridge = 0) {
+    if(!is.na(n_random_points)) {
+        new_points = replicate(n = n_random_points, {
+            convex_comb = DirichletReg::rdirichlet(n = 1, alpha = rep(1, nrow(mds_matrices$X)))
+            return(convex_comb %*% mds_matrices$X)
+        },
+        simplify = FALSE)
+    }
+    biplot_list = list()
+    Ylambdainv = sweep(mds_matrices$Y[,1:k], MARGIN = 2,
+                       STATS = mds_matrices$Lambda[1:k] + ridge, FUN = "/")
+
+    for(i in 1:length(new_points)) {
+        new_point = new_points[[i]]
+        ## mds_matrices$X is the original data
+        dist_to_new_point = apply(mds_matrices$X, 1, function(x) {
+            as.matrix(dist_fns$dist_fn(rbind(x, new_point)))[1,2]
+        })
+        dist_jacobian = apply(mds_matrices$X, 1, function(x) {
+            -dist_fns$dist_deriv(x, new_point)
+        })
+        embedding = .5 * dist_to_new_point %*% Ylambdainv
+        axis_center = matrix(embedding, nrow = ncol(mds_matrices$X), ncol = k, byrow = TRUE)
+        Jd = sweep(dist_jacobian, MARGIN = 2, STATS = dist_to_new_point, FUN = "*")
+        biplot_axes = Jd %*% Ylambdainv
+        biplot_df = data.frame(axis_center, axis_center + biplot_axes, biplot_axes)
+        names(biplot_df) = c(paste0("Embedding", 1:k), paste0("AxisEnd", 1:k), paste0("Axis", 1:k))
+        biplot_df$variable = colnames(mds_matrices$X)
+        biplot_df$sample = i
+        biplot_list[[i]] = biplot_df
+    }
+    return(Reduce(rbind, biplot_list))
 }
 
 #' Computes MDS representation and other associated values
@@ -488,14 +532,17 @@ jaccard_dis <- function(x, y) {
 #' @return A plot.
 #' @export
 sensitivity_biplot <- function(X, dist, dist_deriv = NULL, k = 2, plotting_axes = 1:2,
-                               samples = 1:nrow(X), only_df = FALSE, scale = 1,...) {
+                               n_random_points = NA, new_points = NA,
+                               only_df = FALSE, scale = 1,
+                               ridge = 0, ...) {
     dist_fns = make_dist_fns(dist, dist_deriv)
     mds_matrices = make_mds_matrices(X, dist_fns$dist_fn)
-    sensitivity_list = compute_sensitivity(mds_matrices, dist_fns, k = k, samples = samples)
-    biplot_df = make_biplot_data_frame(sensitivity_list, mds_matrices,
-        axes = plotting_axes, samples = samples, scale = scale)
+    sensitivity_list = compute_sensitivity_new_points(mds_matrices, dist_fns, k = k,
+                                                      n_random_points = n_random_points,
+                                                      new_points = new_points,
+                                                      ridge = ridge)
     if(only_df) {
-        return(biplot_df)
+        return(sensitivity_list)
     }
     ggplot(biplot_df) +
         geom_segment(aes(x = x, y = y, xend = xend, yend = yend, color = variable)) +

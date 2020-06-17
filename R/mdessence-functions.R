@@ -130,9 +130,12 @@ make_dist_fns <- function(dist_fn, dist_deriv) {
         dist_fn = function(x) dist(x, method = "euclidean")
         return(list(dist_fn = dist_fn, dist_deriv = euclidean_dist_deriv))
 
-    } else if(dist_fn == "manhattan") {
+    } else if(dist_fn == "manhattan-pos") {
         dist_fn = function(x) dist(x, method = "manhattan")
-        return(list(dist_fn = dist_fn, dist_deriv = manhattan_dist_deriv))
+        return(list(dist_fn = dist_fn, dist_deriv = manhattan_dist_deriv_pos))
+    } else if(dist_fn == "manhattan-neg") {
+        dist_fn = function(x) dist(x, method = "manhattan")
+        return(list(dist_fn = dist_fn, dist_deriv = manhattan_dist_deriv_neg))
     } else if(dist_fn == "maximum") {
         dist_fn = function(x) dist(x, method = "maximum")
         return(list(dist_fn = dist_fn, dist_deriv = maximum_dist_deriv))
@@ -177,11 +180,25 @@ euclidean_dist_deriv <- function(x, y) {
 #' @return If x and y each have length p, the function returns a
 #' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
 #' d(x,y)
-manhattan_dist_deriv <- function(x, y) {
+manhattan_dist_deriv_pos <- function(x, y) {
     derivs = ifelse(y < x, -1, 1)
-    derivs[x == y] = 0
     return(derivs)
 }
+
+
+#' Partial gradient for manhattan distance
+#'
+#' @param x A p-vector.
+#' @param y A p-vector.
+#'
+#' @return If x and y each have length p, the function returns a
+#' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
+#' d(x,y)
+manhattan_dist_deriv_neg <- function(x, y) {
+    derivs = ifelse(y <= x, -1, 1)
+    return(derivs)
+}
+
 
 #' Partial gradient for max distance
 #'

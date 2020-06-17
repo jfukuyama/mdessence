@@ -19,9 +19,16 @@ compute_sensitivity_samples <- function(mds_matrices, dist_fns, k, samples, ridg
             -dist_fns$dist_deriv(x, mds_matrices$X[j,])
         })
         Jd = sweep(dist_jacobian, MARGIN = 2, STATS = dist_to_j, FUN = "*")
-        biplot_list[[j]] = Jd %*% Ylambdainv
+        biplot_axes = Jd %*% Ylambdainv
+        embedding = mds_matrices$Y[j,1:k]
+        axis_center = matrix(embedding, nrow = ncol(mds_matrices$X), ncol = k, byrow = TRUE)
+        biplot_df = data.frame(axis_center, axis_center + biplot_axes, biplot_axes)
+        names(biplot_df) = c(paste0("Embedding", 1:k), paste0("AxisEnd", 1:k), paste0("Axis", 1:k))
+        biplot_df$variable = colnames(mds_matrices$X)
+        biplot_df$sample = paste0("Original", j)
+        biplot_list[[j]] = biplot_df
     }
-    return(biplot_list)
+    return(Reduce(rbind, biplot_list))
 }
 
 #' Sensitivity biplot ot new points
@@ -34,10 +41,13 @@ compute_sensitivity_samples <- function(mds_matrices, dist_fns, k, samples, ridg
 #' @return A list. The ith element of the list is a p x k matrix, and
 #' the (jl)th element of which describes the sensitivity of variable j
 #' on axis l around point i.
-compute_sensitivity_new_points <- function(mds_matrices, dist_fns, k, new_points, n_random_points = NA, ridge = 0) {
-    if(!is.na(n_random_points)) {
+compute_sensitivity_new_points <- function(mds_matrices, dist_fns, k, new_points, n_random_points, ridge = 0, alpha = 1) {
+    if(n_random_points > 0) {
         new_points = replicate(n = n_random_points, {
-            convex_comb = DirichletReg::rdirichlet(n = 1, alpha = rep(1, nrow(mds_matrices$X)))
+            #s = runif(n = 1, min = -10, max = 10)
+            #dirichlet_mean = 1 / (1 + exp(-s * mds_matrices$Y[,1])) * alpha + 1e-6
+            #convex_comb = DirichletReg::rdirichlet(n = 1, alpha = dirichlet_mean)
+            convex_comb = DirichletReg::rdirichlet(n = 1, alpha = rep(1, nrow(mds_matrices$Y)))
             return(convex_comb %*% mds_matrices$X)
         },
         simplify = FALSE)
@@ -55,14 +65,14 @@ compute_sensitivity_new_points <- function(mds_matrices, dist_fns, k, new_points
         dist_jacobian = apply(mds_matrices$X, 1, function(x) {
             -dist_fns$dist_deriv(x, new_point)
         })
-        embedding = .5 * dist_to_new_point %*% Ylambdainv
+        embedding = .5 * (diag(mds_matrices$jdj) - dist_to_new_point^2) %*% Ylambdainv
         axis_center = matrix(embedding, nrow = ncol(mds_matrices$X), ncol = k, byrow = TRUE)
         Jd = sweep(dist_jacobian, MARGIN = 2, STATS = dist_to_new_point, FUN = "*")
         biplot_axes = Jd %*% Ylambdainv
         biplot_df = data.frame(axis_center, axis_center + biplot_axes, biplot_axes)
         names(biplot_df) = c(paste0("Embedding", 1:k), paste0("AxisEnd", 1:k), paste0("Axis", 1:k))
         biplot_df$variable = colnames(mds_matrices$X)
-        biplot_df$sample = i
+        biplot_df$sample = paste0("New", i)
         biplot_list[[i]] = biplot_df
     }
     return(Reduce(rbind, biplot_list))
@@ -531,23 +541,28 @@ jaccard_dis <- function(x, y) {
 #'
 #' @return A plot.
 #' @export
-sensitivity_biplot <- function(X, dist, dist_deriv = NULL, k = 2, plotting_axes = 1:2,
-                               n_random_points = NA, new_points = NA,
-                               only_df = FALSE, scale = 1,
-                               ridge = 0, ...) {
+sensitivity_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
+                               samples = c(),
+                               n_random_points = 0,
+                               new_points = list(),
+                               ridge = 0, alpha = 1) {
     dist_fns = make_dist_fns(dist, dist_deriv)
     mds_matrices = make_mds_matrices(X, dist_fns$dist_fn)
-    sensitivity_list = compute_sensitivity_new_points(mds_matrices, dist_fns, k = k,
-                                                      n_random_points = n_random_points,
-                                                      new_points = new_points,
-                                                      ridge = ridge)
-    if(only_df) {
-        return(sensitivity_list)
+    sensitivity_dfs = list()
+    if(length(samples) > 0) {
+        sensitivity_dfs[["original"]] = compute_sensitivity_samples(
+            mds_matrices, dist_fns, k = k, samples = samples, ridge = ridge
+        )
+        
     }
-    ggplot(biplot_df) +
-        geom_segment(aes(x = x, y = y, xend = xend, yend = yend, color = variable)) +
-        xlab("MDS1") + ylab("MDS2")
-
+    if(length(new_points) > 0 | n_random_points > 0) {
+        sensitivity_dfs[["new"]] = compute_sensitivity_new_points(
+            mds_matrices, dist_fns, k = k,
+            n_random_points = n_random_points,
+            new_points = new_points,
+            ridge = ridge, alpha = alpha)
+    }
+    return(Reduce(rbind, sensitivity_dfs))
 }
 
 make_biplot_data_frame <- function(sensitivity_list, mds_matrices, axes = 1:2, samples, scale) {

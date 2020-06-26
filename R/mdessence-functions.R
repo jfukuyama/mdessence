@@ -329,11 +329,11 @@ uf_dist_deriv <- function(x, y, A, L, delta_min = 1, positive = TRUE,
 #' @export
 uf_sensitivity_computations <- function(X, A, L) {
     A_lgc = A != 0
-    ##X_lgc = as(X != 0, "lgCMatrix")
+    X_lgc_sparse = as(X != 0, "lgCMatrix")
     X_lgc = X != 0
     sample_indicator_list = list()
     for(i in 1:nrow(X)) {
-        sample_indicator_list[[i]] = Matrix::t(X_lgc[i,,drop=FALSE])
+        sample_indicator_list[[i]] = Matrix::t(X_lgc_sparse[i,,drop=FALSE])
     }
     sample_species_combinations = expand.grid(1:nrow(X), 1:ncol(X))
     ## this is a list where sample_sensitivity_indicators[[j]][[k]]
@@ -386,7 +386,7 @@ uf_sensitivity <- function(X, sample_idx, species_indices = 1:ncol(X),
                                       uf_cached = uf_cached)
     biplot_axes =
         t(.5 * diag(mds_matrices$Lambda[1:n_axes]^(-1)) %*%
-            t(mds_matrices$X[,1:n_axes,drop=FALSE]) %*% generalized_gradients)
+            t(mds_matrices$Y[,1:n_axes,drop=FALSE]) %*% generalized_gradients)
     return(biplot_axes)
 }
 

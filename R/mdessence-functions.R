@@ -1,4 +1,4 @@
-#' Sensitivity biplot at input data points
+#' Local biplot at input data points
 #'
 #' @param mds_matrices The output from make_mds_matrices.
 #' @param dist_fns The output from make_dist_fns.
@@ -6,9 +6,9 @@
 #' @param samples Which of the points to compute sensitivities for.
 #'
 #' @return A list. The ith element of the list is a p x k matrix, and
-#' the (jl)th element of which describes the sensitivity of variable j
+#' the (jl)th element of which describes the LB axis of variable j
 #' on axis l around point i.
-compute_sensitivity_samples <- function(mds_matrices, dist_fns, k, samples) {
+compute_lb_samples <- function(mds_matrices, dist_fns, k, samples) {
     dist_matrix = mds_matrices$delta^(.5)
     biplot_list = list()
     Ylambdainv = sweep(mds_matrices$Y[,1:k], MARGIN = 2,
@@ -31,7 +31,7 @@ compute_sensitivity_samples <- function(mds_matrices, dist_fns, k, samples) {
     return(Reduce(rbind, biplot_list))
 }
 
-#' Sensitivity biplot ot new points
+#' Local biplot at new points
 #'
 #' @param mds_matrices The output from make_mds_matrices.
 #' @param dist_fns The output from make_dist_fns.
@@ -39,9 +39,9 @@ compute_sensitivity_samples <- function(mds_matrices, dist_fns, k, samples) {
 #' @param new_points A list with new points to compute biplot axes for.
 #' 
 #' @return A list. The ith element of the list is a p x k matrix, and
-#' the (jl)th element of which describes the sensitivity of variable j
+#' the (jl)th element of which describes the LB axis of variable j
 #' on axis l around point i.
-compute_sensitivity_new_points <- function(mds_matrices, dist_fns, k, new_points, n_random_points, alpha = 1) {
+compute_lb_new_points <- function(mds_matrices, dist_fns, k, new_points, n_random_points, alpha = 1) {
     if(n_random_points > 0) {
         new_points = replicate(n = n_random_points, {
             #s = runif(n = 1, min = -10, max = 10)
@@ -327,7 +327,7 @@ uf_dist_deriv <- function(x, y, A, L, delta_min = 1, positive = TRUE,
 #' @return A list, containing 
 #' 
 #' @export
-uf_sensitivity_computations <- function(X, A, L) {
+uf_lb_computations <- function(X, A, L) {
     A_lgc = A != 0
     X_lgc_sparse = as(X != 0, "lgCMatrix")
     X_lgc = X != 0
@@ -369,12 +369,12 @@ uf_sensitivity_computations <- function(X, A, L) {
 #' @param species_indices The species for which to compute biplot axes.
 #' @param delta_min Minimum value for perturbation.
 #' @param positive Logical, perturbation in the positive direction?
-#' @param uf_cached The output from uf_sensitivity_computations
+#' @param uf_cached The output from uf_lb_computations
 #' @param mds_matrices The output from make_mds_matrices
 #'
 #' @return A species by n_axes matrix with biplot axes.
 #' @export
-uf_sensitivity <- function(X, sample_idx, species_indices = 1:ncol(X),
+uf_lb <- function(X, sample_idx, species_indices = 1:ncol(X),
                            delta_min = 1, positive = TRUE, uf_cached,
                            mds_matrices, n_axes = 2) {
     if(class(X) != "Matrix") {
@@ -416,8 +416,8 @@ explicit_generalized_gradients <- function(X, sample_idx, delta_min, positive, A
 #'
 #' Computes d(xi,xj+rho e_k) - d(xi,xj)
 #'
-#' @param uf_cache The output from uf_sensitivity_computations.
-delta_from_A_sens <- function(uf_cache, i, j, k) {
+#' @param uf_cache The output from uf_lb_computations.
+delta_from_A_lb <- function(uf_cache, i, j, k) {
     x_j = x_j_pert = uf_cache$sample_indicator_list[[j]]
     ## next five lines should be equivalent to x_j_pert[k,1] = TRUE
     if(all(x_j_pert@i != (k-1))) {
@@ -473,7 +473,6 @@ make_uf_generalized_gradients <- function(X, sample_idx, species_indices,
     } else {
         rho = -ifelse(!X_lgc[sample_idx,], Inf, X[sample_idx,])
     }
-    sample_sensitivity_matrices = uf_cached$sample_sensitivity_matrices
     uf_distances = as.matrix(uf_cached$uf_distances)
     Xt_lgc = Matrix::t(X_lgc)
     generalized_gradients = matrix(0, nrow(X), length(species_indices))
@@ -484,7 +483,7 @@ make_uf_generalized_gradients <- function(X, sample_idx, species_indices,
                 generalized_gradients[i, k] = 0
             } else {
                 dxy = uf_distances[i, sample_idx]
-                delta = delta_from_A_sens(uf_cache, i, sample_idx, species_idx)
+                delta = delta_from_A_lb(uf_cache, i, sample_idx, species_idx)
                 generalized_gradients[i, species_idx] =
                     delta_min / rho[species_idx] * (-1) * delta * (delta + 2 * dxy)
             }
@@ -551,44 +550,44 @@ jaccard_dis <- function(x, y) {
     return(1 - a / (a + b + c))
 }
 
-#' Plots a sensitivity biplot
+#' Plots a local biplot
 #'
 #' @param Y A matrix or data frame with the data the distances were computed from.
-#' @param sensitivity_list A list giving the output from compute_sensitivity
+#' @param lb_list A list giving the output from compute_lb
 #'
 #' @return A plot.
 #' @export
-sensitivity_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
+local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
                                samples = c(),
                                n_random_points = 0,
                                new_points = list(),
                                alpha = 1) {
     dist_fns = make_dist_fns(dist, dist_deriv)
     mds_matrices = make_mds_matrices(X, dist_fns$dist_fn)
-    sensitivity_dfs = list()
+    lb_dfs = list()
     if(length(samples) > 0) {
-        sensitivity_dfs[["original"]] = compute_sensitivity_samples(
-            mds_matrices, dist_fns, k = k, samples = samples,
+        lb_dfs[["original"]] = compute_lb_samples(
+            mds_matrices, dist_fns, k = k, samples = samples
         )
         
     }
     if(length(new_points) > 0 | n_random_points > 0) {
-        sensitivity_dfs[["new"]] = compute_sensitivity_new_points(
+        lb_dfs[["new"]] = compute_lb_new_points(
             mds_matrices, dist_fns, k = k,
             n_random_points = n_random_points,
             new_points = new_points,
             alpha = alpha)
     }
-    return(Reduce(rbind, sensitivity_dfs))
+    return(Reduce(rbind, lb_dfs))
 }
 
-make_biplot_data_frame <- function(sensitivity_list, mds_matrices, axes = 1:2, samples, scale) {
+make_biplot_data_frame <- function(lb_list, mds_matrices, axes = 1:2, samples, scale) {
     n = nrow(mds_matrices$X)
     p = ncol(mds_matrices$X)
     varnames = get_variable_names(mds_matrices$X)
     biplot_list = lapply(1:n, function(i) {
         if(i %in% samples) {
-            return(make_one_sample_biplot_df(sensitivity = sensitivity_list[[i]][,axes],
+            return(make_one_sample_biplot_df(lb = lb_list[[i]][,axes],
                                              center = mds_matrices$Y[i,axes],
                                              sample = i, varnames = varnames,
                                              scale = scale))
@@ -611,16 +610,18 @@ get_variable_names <- function(m) {
     return(colnames(m))
 }
 
-make_one_sample_biplot_df <- function(sensitivity, center, sample, varnames, scale) {
-    endpoints = sweep(sensitivity * scale, MARGIN = 2, STATS = center, FUN = '+')
-    centers = matrix(center, nrow = nrow(sensitivity), ncol = ncol(sensitivity), byrow = TRUE)
+make_one_sample_biplot_df <- function(lb, center, sample, varnames, scale) {
+    endpoints = sweep(lb * scale, MARGIN = 2, STATS = center, FUN = '+')
+    centers = matrix(center, nrow = nrow(lb), ncol = ncol(lb), byrow = TRUE)
     one_sample_df = data.frame(centers, endpoints, variable = varnames, sample = sample)
     colnames(one_sample_df)[1:4] = c("x", "y", "xend", "yend")
     return(one_sample_df)
 }
 
 
-correlation_biplot <- function(X, dist, k = 2, plotting_axes = 1:2) {
+#' Make a correlation biplot
+#' @export
+correlation_biplot <- function(X, dist, plotting_axes = 1:2) {
     mds_matrices = make_mds_matrices(X, dist)
     biplot_axes = cor(X, mds_matrices$Y)[,plotting_axes]
     colnames(biplot_axes) = sapply(plotting_axes, function(i) sprintf("Axis%i", i))

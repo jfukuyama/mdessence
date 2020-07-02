@@ -10,7 +10,7 @@ interactiveBiplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2, sam
                               var_mapping = aes_string(x = "Axis1", y = "Axis2"),
                               layout = c(5,5), ...) {
     ui <- fluidPage(
-        headerPanel("Interactive Sensitivity Biplot"),
+        headerPanel("Interactive Local Biplot"),
         sidebarPanel(width = 1,
                      actionButton("done", "Done")),
         mainPanel(width = 11,
@@ -26,7 +26,7 @@ interactiveBiplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2, sam
         dist_fns = make_dist_fns(dist, dist_deriv)
         mds_matrices = make_mds_matrices(X, dist_fns$dist_fn)
         embedding_and_sample_name = data.frame(mds_matrices$Y, sample = paste0("Original", 1:nrow(mds_matrices$Y)))
-        sensitivity_df = compute_sensitivity_samples(mds_matrices, dist_fns, k = k, samples = samples)
+        lb_df = compute_lb_samples(mds_matrices, dist_fns, k = k, samples = samples)
         varnames = get_variable_names(mds_matrices$X)
         output$plot_samples = renderPlot({
             if(!is.null(sample_data))
@@ -42,23 +42,23 @@ interactiveBiplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2, sam
         output$plot_variables = renderPlot({
             biplot_center = nearPoints(embedding_and_sample_name, input$plot_click, maxpoints = 1)
             sample_name = biplot_center$sample
-            if(!(sample_name %in% sensitivity_df$sample)) {
+            if(!(sample_name %in% lb_df$sample)) {
                 sample_num = as.numeric(gsub("Original", "", sample_name))
-                sensitivity_df = rbind(sensitivity_df,
-                                        compute_sensitivity_samples(mds_matrices, dist_fns, k, samples = sample_num))
+                lb_df = rbind(lb_df,
+                                        compute_lb_samples(mds_matrices, dist_fns, k, samples = sample_num))
             }
             if(!is.null(var_data)) {
-                p = ggplot(data.frame(subset(sensitivity_df, sample == sample_name), var_data), var_mapping) +
+                p = ggplot(data.frame(subset(lb_df, sample == sample_name), var_data), var_mapping) +
                     geom_point()
             } else {
-                p = ggplot(subset(sensitivity_df, sample == sample_name), var_mapping) +
+                p = ggplot(subset(lb_df, sample == sample_name), var_mapping) +
                     geom_point()
             }
             p
         })
 
         observeEvent(input$done, {
-            stopApp(sensitivity_df)
+            stopApp(lb_df)
         })
     }
     

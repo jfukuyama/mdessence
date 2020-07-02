@@ -44,10 +44,7 @@ compute_lb_samples <- function(mds_matrices, dist_fns, k, samples) {
 compute_lb_new_points <- function(mds_matrices, dist_fns, k, new_points, n_random_points, alpha = 1) {
     if(n_random_points > 0) {
         new_points = replicate(n = n_random_points, {
-            #s = runif(n = 1, min = -10, max = 10)
-            #dirichlet_mean = 1 / (1 + exp(-s * mds_matrices$Y[,1])) * alpha + 1e-6
-            #convex_comb = DirichletReg::rdirichlet(n = 1, alpha = dirichlet_mean)
-            convex_comb = DirichletReg::rdirichlet(n = 1, alpha = rep(1, nrow(mds_matrices$Y)))
+            convex_comb = DirichletReg::rdirichlet(n = 1, alpha = rep(alpha, nrow(mds_matrices$Y)))
             return(convex_comb %*% mds_matrices$X)
         },
         simplify = FALSE)
@@ -58,7 +55,6 @@ compute_lb_new_points <- function(mds_matrices, dist_fns, k, new_points, n_rando
 
     for(i in 1:length(new_points)) {
         new_point = new_points[[i]]
-        ## mds_matrices$X is the original data
         dist_to_new_point = apply(mds_matrices$X, 1, function(x) {
             as.matrix(dist_fns$dist_fn(rbind(x, new_point)))[1,2]
         })
@@ -390,28 +386,6 @@ uf_lb <- function(X, sample_idx, species_indices = 1:ncol(X),
     return(biplot_axes)
 }
 
-
-explicit_generalized_gradients <- function(X, sample_idx, delta_min, positive, A, L) {
-    if(positive) {
-        rho = ifelse(X[sample_idx,] == 0, delta_min, Inf)
-    } else {
-        rho = -ifelse(X[sample_idx,] == 0, Inf, X[sample_idx,])
-    }
-    generalized_gradients = matrix(0, nrow(X), ncol(X))
-    for(i in 1:nrow(X)) {
-        for(k in 1:ncol(X)) {
-            x = X[i,]
-            y = X[sample_idx,]
-            y_pert = y
-            y_pert[k] = y_pert[k] + rho[k]
-            dxy2 = uf_dist(rbind(x, y), A, L)^2
-            dxypert2 = uf_dist(rbind(x, y_pert), A, L)^2
-            generalized_gradients[i,k] = (delta_min * rho[k]^(-1) * (dxy2 - dxypert2))
-        }
-    }
-    return(generalized_gradients)
-}
-
 #' Computes change in uf distance after perturbation
 #'
 #' Computes d(xi,xj+rho e_k) - d(xi,xj)
@@ -437,8 +411,8 @@ delta_from_A_lb <- function(uf_cache, i, j, k) {
     #       browser
     ##d1 = sum(abs((A_sens_x_i > 0) - (A_sens_x_j > 0)) * uf_cache$L)
     ##d2 = sum(abs((A_sens_x_i> 0) - (A_sens_x_j_pert > 0)) * uf_cache$L)
-    d1 = mdessence:::uf_num_from_indicators(A_sens_x_i, A_sens_x_j, uf_cache$L)
-    d2 = mdessence:::uf_num_from_indicators(A_sens_x_i, A_sens_x_j_pert, uf_cache$L)
+    d1 = uf_num_from_indicators(A_sens_x_i, A_sens_x_j, uf_cache$L)
+    d2 = uf_num_from_indicators(A_sens_x_i, A_sens_x_j_pert, uf_cache$L)
     (d2 - d1) / sum(uf_cache$T)
 }
 
@@ -558,10 +532,10 @@ jaccard_dis <- function(x, y) {
 #' @return A plot.
 #' @export
 local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
-                               samples = c(),
-                               n_random_points = 0,
-                               new_points = list(),
-                               alpha = 1) {
+                         samples = c(),
+                         n_random_points = 0,
+                         new_points = list(),
+                         alpha = 1) {
     dist_fns = make_dist_fns(dist, dist_deriv)
     mds_matrices = make_mds_matrices(X, dist_fns$dist_fn)
     lb_dfs = list()
@@ -580,44 +554,6 @@ local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
     }
     return(Reduce(rbind, lb_dfs))
 }
-
-make_biplot_data_frame <- function(lb_list, mds_matrices, axes = 1:2, samples, scale) {
-    n = nrow(mds_matrices$X)
-    p = ncol(mds_matrices$X)
-    varnames = get_variable_names(mds_matrices$X)
-    biplot_list = lapply(1:n, function(i) {
-        if(i %in% samples) {
-            return(make_one_sample_biplot_df(lb = lb_list[[i]][,axes],
-                                             center = mds_matrices$Y[i,axes],
-                                             sample = i, varnames = varnames,
-                                             scale = scale))
-
-        } else {
-            point = mds_matrices$Y[i,axes]
-            return(data.frame(x = point[1], y = point[2], xend = NA, yend = NA,
-                              variable = NA, sample = i))
-        }
-    })
-    biplot_df = Reduce(rbind, biplot_list)
-    return(biplot_df)
-}
-
-
-get_variable_names <- function(m) {
-    if(is.null(colnames(m))) {
-        return(paste("Var", 1:ncol(m), sep = ""))
-    }
-    return(colnames(m))
-}
-
-make_one_sample_biplot_df <- function(lb, center, sample, varnames, scale) {
-    endpoints = sweep(lb * scale, MARGIN = 2, STATS = center, FUN = '+')
-    centers = matrix(center, nrow = nrow(lb), ncol = ncol(lb), byrow = TRUE)
-    one_sample_df = data.frame(centers, endpoints, variable = varnames, sample = sample)
-    colnames(one_sample_df)[1:4] = c("x", "y", "xend", "yend")
-    return(one_sample_df)
-}
-
 
 #' Make a correlation biplot
 #' @export

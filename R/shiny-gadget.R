@@ -64,3 +64,10 @@ interactiveBiplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2, sam
     
     runGadget(ui, server)
 }
+
+get_variable_names <- function(m) {
+    if(is.null(colnames(m))) {
+        return(paste("Var", 1:ncol(m), sep = ""))
+    }
+    return(colnames(m))
+}

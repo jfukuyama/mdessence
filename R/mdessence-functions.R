@@ -22,8 +22,8 @@ compute_lb_samples <- function(mds_matrices, dist_fns, k, samples) {
         biplot_axes = Jd %*% Ylambdainv
         embedding = mds_matrices$Y[j,1:k]
         axis_center = matrix(embedding, nrow = ncol(mds_matrices$X), ncol = k, byrow = TRUE)
-        biplot_df = data.frame(axis_center, axis_center + biplot_axes, biplot_axes)
-        names(biplot_df) = c(paste0("Embedding", 1:k), paste0("AxisEnd", 1:k), paste0("Axis", 1:k))
+        biplot_df = data.frame(axis_center,  biplot_axes)
+        names(biplot_df) = c(paste0("Embedding", 1:k), paste0("Axis", 1:k))
         biplot_df$variable = colnames(mds_matrices$X)
         biplot_df$sample = paste0("Original", j)
         biplot_list[[j]] = biplot_df
@@ -65,8 +65,8 @@ compute_lb_new_points <- function(mds_matrices, dist_fns, k, new_points, n_rando
         axis_center = matrix(embedding, nrow = ncol(mds_matrices$X), ncol = k, byrow = TRUE)
         Jd = sweep(dist_jacobian, MARGIN = 2, STATS = dist_to_new_point, FUN = "*")
         biplot_axes = Jd %*% Ylambdainv
-        biplot_df = data.frame(axis_center, axis_center + biplot_axes, biplot_axes)
-        names(biplot_df) = c(paste0("Embedding", 1:k), paste0("AxisEnd", 1:k), paste0("Axis", 1:k))
+        biplot_df = data.frame(axis_center, biplot_axes)
+        names(biplot_df) = c(paste0("Embedding", 1:k), paste0("Axis", 1:k))
         biplot_df$variable = colnames(mds_matrices$X)
         biplot_df$sample = paste0("New", i)
         biplot_list[[i]] = biplot_df

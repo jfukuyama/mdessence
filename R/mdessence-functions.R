@@ -263,7 +263,7 @@ jaccard_dis <- function(x, y) {
 #' @return A plot.
 #' @export
 local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
-                         samples = c(),
+                         samples = 1:nrow(X),
                          n_random_points = 0,
                          new_points = list(),
                          alpha = 1) {

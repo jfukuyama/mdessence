@@ -65,7 +65,7 @@ interactive_biplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2,
                         geom_point()
                 if(!is.null(sample_facet))
                     p = p + sample_facet
-                p + coord_fixed()
+                p + coord_fixed() + get_square_limits(p)
         }, width = 600, res = 90)
         output$plot_variables = renderPlot({
             biplot_center = nearPoints(embedding_and_sample_name, input$plot_click, maxpoints = 1)
@@ -83,7 +83,7 @@ interactive_biplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2,
                     p = ggplot(subset(lb_df, sample == sample_name), var_mapping) +
                         geom_point()
                 }
-                p + coord_fixed()
+                p + coord_fixed() + get_square_limits(p)
             }
         }, width = 600, res = 90)
 
@@ -93,6 +93,21 @@ interactive_biplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2,
     }
     
     runGadget(ui, server)
+}
+
+get_square_limits <- function(p) {
+    build = ggplot_build(p)
+    y_limits = build$layout$panel_scales_y[[1]]$range$range
+    x_limits = build$layout$panel_scales_x[[1]]$range$range
+    y_range = y_limits[2] - y_limits[1]
+    x_range = x_limits[2] - x_limits[1]
+    if(y_range > x_range) {
+        x_limits = c(mean(x_limits) - y_range / 2, mean(x_limits) + y_range / 2)
+        return(xlim(x_limits))
+    } else {
+        y_limits = c(mean(y_limits) - x_range / 2, mean(y_limits) + x_range / 2)
+        return(ylim(x_limits))
+    }
 }
 
 get_variable_names <- function(m) {

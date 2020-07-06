@@ -210,9 +210,7 @@ maximum_dist_deriv <- function(x, y) {
 #' @export
 local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
                          samples = 1:nrow(X),
-                         n_random_points = 0,
-                         new_points = list(),
-                         alpha = 1) {
+                         new_points = list()) {
     dist_fns = make_dist_fns(dist, dist_deriv)
     mds_matrices = make_mds_matrices(X, dist_fns$dist_fn)
     lb_dfs = list()
@@ -222,10 +220,9 @@ local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
         )
         
     }
-    if(length(new_points) > 0 | n_random_points > 0) {
+    if(length(new_points) > 0) {
         lb_dfs[["new"]] = compute_lb_new_points(
             mds_matrices, dist_fns, k = k,
-            n_random_points = n_random_points,
             new_points = new_points,
             alpha = alpha)
     }

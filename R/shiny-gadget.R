@@ -1,23 +1,51 @@
 #' Interactive biplot
 #'
+#' @param X A data matrix, samples as rows.
+#' @param dist Either a string describing one of the supported
+#'     distances or a function that takes a matrix and returns the
+#'     distances between the rows of the matrix.
+#' @param dist_deriv Either NULL (if dist is a string describing one
+#'     of the supported distances) or a function that takes two
+#'     vectors and computes \frac{\partia}{\partial y_j}d(x,y).
+#' @param k The number of embedding dimensions.
+#' @param sample_data A data frame, containing extra information about
+#'     the samples to be appended to the embeddings for plotting.
+#' @param sample_mapping The output from aes_string. Defaut is
+#'     aes_string(x = "Axis1", y = "Axis2"); add in additional
+#'     aesthetics to map variables in sample_data.  in sample_data.
+#' @param sample_facet Output from facet_grid or facet_wrap. Can facet
+#'     on variables in sample_data.
+#' @param var_data A data frame, containing extra information about
+#'     the variables to be appended to the local biplot axes for
+#'     plotting.
+#' @param var_mapping The output from aes_string. Default is
+#'     aes_string(x = "Axis1", y = "Axis2"); add in additional
+#'     aesthetics to map variabes in var_data.
+#' @param layout The widths of the sample plot window and the variable
+#'     plot window. Widths are out of 12.
+#' @param width The width of the plots, in pixels.
+#' @param res The resolution for the plots.
+#'
 #' @import shiny
 #' @export
-interactiveBiplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2, samples = NULL,
-                              sample_data = NULL,
-                              sample_mapping = aes_string(x = "Axis1", y = "Axis2"),
-                              sample_facet = NULL,
-                              var_data = NULL,
-                              var_mapping = aes_string(x = "Axis1", y = "Axis2"),
-                              layout = c(5,5), ...) {
+interactive_biplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2,
+                               sample_data = NULL,
+                               sample_mapping = aes_string(x = "Axis1", y = "Axis2"),
+                               sample_facet = NULL,
+                               var_data = NULL,
+                               var_mapping = aes_string(x = "Axis1", y = "Axis2"),
+                               layout = c(6,6),
+                               width = 600,
+                               res = 90, ...) {
+    samples = NULL
     ui <- fluidPage(
         headerPanel("Interactive Local Biplot"),
-        sidebarPanel(width = 1,
-                     actionButton("done", "Done")),
         mainPanel(width = 11,
                   fluidPage(
                       fluidRow(
                           column(layout[1], plotOutput("plot_samples", click = "plot_click")),
-                          column(layout[2], plotOutput("plot_variables")))
+                          column(layout[2], plotOutput("plot_variables"))),
+                      fluidRow(column(1), actionButton("done", "Done"))
                   )
                   )
     )
@@ -37,25 +65,27 @@ interactiveBiplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2, sam
                         geom_point()
                 if(!is.null(sample_facet))
                     p = p + sample_facet
-                p
-        })
+                p + coord_fixed()
+        }, width = 600, res = 90)
         output$plot_variables = renderPlot({
             biplot_center = nearPoints(embedding_and_sample_name, input$plot_click, maxpoints = 1)
             sample_name = biplot_center$sample
-            if(!(sample_name %in% lb_df$sample)) {
-                sample_num = as.numeric(gsub("Original", "", sample_name))
-                lb_df = rbind(lb_df,
-                                        compute_lb_samples(mds_matrices, dist_fns, k, samples = sample_num))
+            if(length(sample_name) > 0) {
+                if(!(sample_name %in% lb_df$sample)) {
+                    sample_num = as.numeric(gsub("Original", "", sample_name))
+                    lb_df = rbind(lb_df,
+                                  compute_lb_samples(mds_matrices, dist_fns, k, samples = sample_num))
+                }
+                if(!is.null(var_data)) {
+                    p = ggplot(data.frame(subset(lb_df, sample == sample_name), var_data), var_mapping) +
+                        geom_point()
+                } else {
+                    p = ggplot(subset(lb_df, sample == sample_name), var_mapping) +
+                        geom_point()
+                }
+                p + coord_fixed()
             }
-            if(!is.null(var_data)) {
-                p = ggplot(data.frame(subset(lb_df, sample == sample_name), var_data), var_mapping) +
-                    geom_point()
-            } else {
-                p = ggplot(subset(lb_df, sample == sample_name), var_mapping) +
-                    geom_point()
-            }
-            p
-        })
+        }, width = 600, res = 90)
 
         observeEvent(input$done, {
             stopApp(lb_df)

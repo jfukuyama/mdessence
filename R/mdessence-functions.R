@@ -184,7 +184,7 @@ manhattan_dist_deriv_neg <- function(x, y) {
 }
 
 
-#' Partial gradient for max distance
+#' Partial derivatives for max distance
 #'
 #' @param x A p-vector.
 #' @param y A p-vector.
@@ -192,10 +192,36 @@ manhattan_dist_deriv_neg <- function(x, y) {
 #' @return If x and y each have length p, the function returns a
 #' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
 #' d(x,y)
-maximum_dist_deriv <- function(x, y) {
+maximum_dist_deriv_pos <- function(x, y) {
     max_abs = max(abs(y - x))
-    deriv = ifelse(y < x, -1, 1)
-    deriv[abs(y - x) != max_abs] = 0
+    active_coordinates = which(abs(y - x) == max_abs)
+    deriv = rep(0, length(x))
+    if(length(active_coordinates) > 1) {
+        deriv[active_coordinates] = ifelse(y[active_coordinates] > x[active_coordinates], 1, 0)
+    } else {
+        deriv[active_coordinates] = ifelse(y[active_coordinates] >= x[active_coordinates], 1, -1)
+    }
+    return(deriv)
+}
+
+
+#' Partial derivatives for max distance
+#'
+#' @param x A p-vector.
+#' @param y A p-vector.
+#'
+#' @return If x and y each have length p, the function returns a
+#' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
+#' d(x,y)
+maximum_dist_deriv_neg <- function(x, y) {
+    max_abs = max(abs(y - x))
+    active_coordinates = which(abs(y - x) == max_abs)
+    deriv = rep(0, length(x))
+    if(length(active_coordinates) > 1) {
+        deriv[active_coordinates] = ifelse(y[active_coordinates] > x[active_coordinates], 0, -1)
+    } else {
+        deriv[active_coordinates] = ifelse(y[active_coordinates] <= x[active_coordinates], -1, 1)
+    }
     return(deriv)
 }
 
@@ -236,8 +262,7 @@ local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
     if(length(new_points) > 0) {
         lb_dfs[["new"]] = compute_lb_new_points(
             mds_matrices, dist_fns, k = k,
-            new_points = new_points,
-            alpha = alpha)
+            new_points = new_points)
     }
     return(Reduce(rbind, lb_dfs))
 }

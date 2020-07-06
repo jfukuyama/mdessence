@@ -5,18 +5,23 @@ test_that("Derivative functions have right size output", {
     expect_equal(length(euclidean_dist_deriv(x, y)), length(x))
     expect_equal(length(manhattan_dist_deriv_pos(x, y)), length(x))
     expect_equal(length(manhattan_dist_deriv_neg(x, y)), length(x))
-    expect_equal(length(maximum_dist_deriv(x, y)), length(x))
+    expect_equal(length(maximum_dist_deriv_pos(x, y)), length(x))
+    expect_equal(length(maximum_dist_deriv_neg(x, y)), length(x))
 })
 
 test_that("Max dist derivative gives correct results", {
-    expect_equal(maximum_dist_deriv(x, y), c(1, 0, 0, 0, -1))
+    expect_equal(maximum_dist_deriv_pos(0, 0), 1)
+    expect_equal(maximum_dist_deriv_neg(0, 0), -1)
+    expect_equal(maximum_dist_deriv_pos(c(0,1), c(1,2)), c(1,1))
+    expect_equal(maximum_dist_deriv_neg(c(0,1), c(1,2)), c(0,0))
+    expect_equal(maximum_dist_deriv_pos(c(0,1), c(1,1)), c(1,0))
+    expect_equal(maximum_dist_deriv_neg(c(0,1), c(1,1)), c(1,0))
 })
 
 context("Distance function creation")
 euc_dist_fns = make_dist_fns(dist_fn = "euclidean", dist_deriv = NULL)
 manhattan_dist_fns = make_dist_fns(dist_fn = "manhattan-pos", dist_deriv = NULL)
 max_dist_fns = make_dist_fns(dist_fn = "manhattan-pos", dist_deriv = NULL)
-jaccard_dist_fns = make_dist_fns(dist_fn = "jaccard", dist_deriv = NULL)
 test_that("make_dist_fns gives correct type of output", {
     expect_equal(typeof(euc_dist_fns), "list")
     expect_equal(length(euc_dist_fns), 2)

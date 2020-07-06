@@ -5,9 +5,11 @@
 #' @param k The number of embedding dimensions for multi-dimensional scaling. Defaults to 2.
 #' @param samples Which of the points to compute sensitivities for.
 #'
-#' @return A list. The ith element of the list is a p x k matrix, and
-#' the (jl)th element of which describes the LB axis of variable j
-#' on axis l around point i.
+#' @return A data frame. Each row describes one LB axis for one
+#'     sample. Columns labeled 'Embedding' give the embedding of the
+#'     sample in MDS space, columns labeled 'Axis' give the LB axis
+#'     for a given sample and variable. Columns labeled 'variable' and
+#'     'sample' give the variable and sample for the LB axis values.
 compute_lb_samples <- function(mds_matrices, dist_fns, k, samples) {
     dist_matrix = mds_matrices$delta^(.5)
     biplot_list = list()
@@ -38,17 +40,12 @@ compute_lb_samples <- function(mds_matrices, dist_fns, k, samples) {
 #' @param k The number of embedding dimensions for multi-dimensional scaling. Defaults to 2.
 #' @param new_points A list with new points to compute biplot axes for.
 #' 
-#' @return A list. The ith element of the list is a p x k matrix, and
-#' the (jl)th element of which describes the LB axis of variable j
-#' on axis l around point i.
-compute_lb_new_points <- function(mds_matrices, dist_fns, k, new_points, n_random_points, alpha = 1) {
-    if(n_random_points > 0) {
-        new_points = replicate(n = n_random_points, {
-            convex_comb = DirichletReg::rdirichlet(n = 1, alpha = rep(alpha, nrow(mds_matrices$Y)))
-            return(convex_comb %*% mds_matrices$X)
-        },
-        simplify = FALSE)
-    }
+#' @return A data frame. Each row describes one LB axis for one
+#'     sample. Columns labeled 'Embedding' give the embedding of the
+#'     sample in MDS space, columns labeled 'Axis' give the LB axis
+#'     for a given sample and variable. Columns labeled 'variable' and
+#'     'sample' give the variable and sample for the LB axis values.
+compute_lb_new_points <- function(mds_matrices, dist_fns, k, new_points) {
     biplot_list = list()
     Ylambdainv = sweep(mds_matrices$Y[,1:k], MARGIN = 2,
                        STATS = mds_matrices$Lambda[1:k], FUN = "/")
@@ -76,15 +73,15 @@ compute_lb_new_points <- function(mds_matrices, dist_fns, k, new_points, n_rando
 
 #' Computes MDS representation and other associated values
 #'
-#' @param Y A samples x variables data matrix
+#' @param X A samples x variables data matrix
 #' @param dist_fn A function that computes the distances between the rows of Y.
 #'
 #' @return A list, containing
 #' - delta: Matrix of squared distances.
 #' - jdj: Row- and column-centered -.5 * delta
-#' - d2: The diagonal elements of B
+#' - d2: The diagonal elements of jdj
 #' - Y: The embeddings of the samples in the MDS space.
-#' - Lambda: The eigenvalues of B.
+#' - Lambda: The eigenvalues of jdj.
 #' - X: The original data.
 make_mds_matrices <- function(X, dist_fn) {
     n = nrow(X)
@@ -118,7 +115,10 @@ make_mds_matrices <- function(X, dist_fn) {
 #' @param dist Either a string or a function.
 #' @param dist_deriv Either NULL or a function.
 #'
-#' @return A list containing two functions, dist_fn and dist_deriv
+#' @return A list containing two functions, dist_fn and
+#'     dist_deriv. dist_fn takes a matrix and computes a distance
+#'     between the rows. dist_deriv takes two vectors, x and y, and
+#'     computes \frac{\partial}{\partial y_j}d(x,y), j = 1,...,p.
 make_dist_fns <- function(dist_fn, dist_deriv) {
     if(typeof(dist_fn) == "closure" & typeof(dist_deriv) == "closure") {
         return(list(dist_fn = dist_fn, dist_deriv = dist_deriv))
@@ -141,8 +141,7 @@ make_dist_fns <- function(dist_fn, dist_deriv) {
     }
 }
 
-
-#' Partial gradient for Euclidean distance
+#' Partial derivatives for Euclidean distance
 #'
 #' @param x A p-vector.
 #' @param y A p-vector.
@@ -157,28 +156,28 @@ euclidean_dist_deriv <- function(x, y) {
     return((y - x) * (sum((y - x)^2))^(-.5))
 }
 
-#' Partial gradient for manhattan distance
+#' Partial derivatives for Manhattan distance
 #'
 #' @param x A p-vector.
 #' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
 #' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
-#' d(x,y)
+#' d(x,y).
 manhattan_dist_deriv_pos <- function(x, y) {
     derivs = ifelse(y < x, -1, 1)
     return(derivs)
 }
 
 
-#' Partial gradient for manhattan distance
+#' Partial derivatives for Manhattan distance
 #'
 #' @param x A p-vector.
 #' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
 #' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
-#' d(x,y)
+#' d(x,y).
 manhattan_dist_deriv_neg <- function(x, y) {
     derivs = ifelse(y <= x, -1, 1)
     return(derivs)
@@ -201,12 +200,26 @@ maximum_dist_deriv <- function(x, y) {
 }
 
 
-#' Plots a local biplot
+#' Create local biplot axes
 #'
-#' @param Y A matrix or data frame with the data the distances were computed from.
-#' @param lb_list A list giving the output from compute_lb
+#' @param X A data matrix, samples as rows.
+#' @param dist Either a string describing one of the supported
+#'     distances or a function that takes a matrix and returns the
+#'     distances between the rows of the matrix.
+#' @param dist_deriv Either NULL (if dist is a string describing one
+#'     of the supported distances) or a function that takes two
+#'     vectors and computes \frac{\partia}{\partial y_j}d(x,y).
+#' @param k The number of embedding dimensions.
+#' @param samples The samples to compute local biplot axes
+#'     at. Defaults to all of the original samples.
+#' @param new_points New points (not one of the original samples) to
+#'     compute local biplot axes at.
 #'
-#' @return A plot.
+#' @return A data frame. Each row describes one LB axis for one
+#'     sample. Columns labeled 'Embedding' give the embedding of the
+#'     sample in MDS space, columns labeled 'Axis' give the LB axis
+#'     for a given sample and variable. Columns labeled 'variable' and
+#'     'sample' give the variable and sample for the LB axis values.
 #' @export
 local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
                          samples = 1:nrow(X),

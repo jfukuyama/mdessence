@@ -100,7 +100,8 @@ make_mds_matrices <- function(X, dist_fn) {
     Beig = eigen(jdj, symmetric = TRUE)
     Beig$vectors = Beig$vectors[,1:(n-1)]
     Beig$values = Beig$values[1:(n-1)]
-    Y = Beig$vectors %*% diag(sqrt(Beig$values))
+    smallest_positive_eval_idx = max(which(Beig$values > 0))
+    Y = Beig$vectors[,1:smallest_positive_eval_idx] %*% diag(sqrt(Beig$values[1:smallest_positive_eval_idx]))
     colnames(Y) = paste("Axis", 1:ncol(Y), sep = "")
     out = list()
     out$d2 = diag(jdj)

@@ -54,5 +54,19 @@ test_that("make_mds_matrices works", {
     ## jdj is the row- and column-centered version of -.5 * delta
     expect_equal(rowSums(mds_matrices$jdj), rep(0, nrow(X)))
     expect_equal(colSums(mds_matrices$jdj), rep(0, nrow(X)))
+    ## check that the distances match
+    expect_equivalent(dist(X, method = "euclidean"), dist(mds_matrices$Y, method = "euclidean"))
+    expect_equivalent(as.matrix(dist(X))^2, mds_matrices$delta)
 })
 
+
+context("Local biplot function")
+lb_orig_points = local_biplot(X, dist = "euclidean")
+lb_new_point = local_biplot(X, dist = "euclidean", samples = c(), new_points = list(rnorm(4)))
+test_that("local_biplot function works", {
+    expect_equal(nrow(lb_new_point), 4)
+    expect_equal(nrow(lb_orig_points), nrow(X) * ncol(X))
+    ## Euclidean distance means that the axes should be the same everywhere
+    expect_equivalent(subset(lb_orig_points, sample == "Original1")$Axis1, lb_new_point$Axis1)
+    expect_equivalent(subset(lb_orig_points, sample == "Original1")$Axis2, lb_new_point$Axis2)
+})

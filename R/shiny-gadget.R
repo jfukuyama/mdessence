@@ -6,7 +6,7 @@
 #'     distances between the rows of the matrix.
 #' @param dist_deriv Either NULL (if dist is a string describing one
 #'     of the supported distances) or a function that takes two
-#'     vectors and computes \frac{\partia}{\partial y_j}d(x,y).
+#'     vectors and computes \eqn{\frac{\partial}{\partial y_j}d(x,y)}.
 #' @param k The number of embedding dimensions.
 #' @param sample_data A data frame, containing extra information about
 #'     the samples to be appended to the embeddings for plotting.
@@ -27,8 +27,9 @@
 #' @param res The resolution for the plots.
 #'
 #' @import shiny
+#' @import ggplot2
 #' @export
-interactive_biplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2,
+interactive_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
                                sample_data = NULL,
                                sample_mapping = aes_string(x = "Axis1", y = "Axis2"),
                                sample_facet = NULL,
@@ -36,7 +37,7 @@ interactive_biplot <- function(X, dist, dist_deriv = NULL, k = 2, axes = 1:2,
                                var_mapping = aes_string(x = "Axis1", y = "Axis2"),
                                layout = c(6,6),
                                width = 600,
-                               res = 90, ...) {
+                               res = 90) {
     samples = NULL
     ui <- fluidPage(
         headerPanel("Interactive Local Biplot"),

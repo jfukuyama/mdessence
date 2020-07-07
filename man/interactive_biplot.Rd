@@ -9,7 +9,6 @@ interactive_biplot(
   dist,
   dist_deriv = NULL,
   k = 2,
-  axes = 1:2,
   sample_data = NULL,
   sample_mapping = aes_string(x = "Axis1", y = "Axis2"),
   sample_facet = NULL,
@@ -17,8 +16,7 @@ interactive_biplot(
   var_mapping = aes_string(x = "Axis1", y = "Axis2"),
   layout = c(6, 6),
   width = 600,
-  res = 90,
-  ...
+  res = 90
 )
 }
 \arguments{
@@ -30,7 +28,7 @@ distances between the rows of the matrix.}
 
 \item{dist_deriv}{Either NULL (if dist is a string describing one
 of the supported distances) or a function that takes two
-vectors and computes \frac{\partia}{\partial y_j}d(x,y).}
+vectors and computes \eqn{\frac{\partial}{\partial y_j}d(x,y)}.}
 
 \item{k}{The number of embedding dimensions.}
 

@@ -112,13 +112,14 @@ make_mds_matrices <- function(X, dist_fn) {
 
 #' Creates distance function and corresponding derivative function
 #'
-#' @param dist Either a string or a function.
+#' @param dist_fn Either a string or a function.
 #' @param dist_deriv Either NULL or a function.
 #'
 #' @return A list containing two functions, dist_fn and
 #'     dist_deriv. dist_fn takes a matrix and computes a distance
 #'     between the rows. dist_deriv takes two vectors, x and y, and
-#'     computes \frac{\partial}{\partial y_j}d(x,y), j = 1,...,p.
+#'     computes \eqn{\frac{\partial}{\partial y_j}d(x,y)}, j = 1,...,p.
+#' @importFrom stats dist
 make_dist_fns <- function(dist_fn, dist_deriv) {
     if(typeof(dist_fn) == "closure" & typeof(dist_deriv) == "closure") {
         return(list(dist_fn = dist_fn, dist_deriv = dist_deriv))
@@ -133,10 +134,13 @@ make_dist_fns <- function(dist_fn, dist_deriv) {
     } else if(dist_fn == "manhattan-neg") {
         dist_fn = function(x) dist(x, method = "manhattan")
         return(list(dist_fn = dist_fn, dist_deriv = manhattan_dist_deriv_neg))
-    } else if(dist_fn == "maximum") {
+    } else if(dist_fn == "maximum-pos") {
         dist_fn = function(x) dist(x, method = "maximum")
-        return(list(dist_fn = dist_fn, dist_deriv = maximum_dist_deriv))
-    }  else {
+        return(list(dist_fn = dist_fn, dist_deriv = maximum_dist_deriv_pos))
+    } else if(dist_fn == "maximum-neg") {
+        dist_fn = function(x) dist(x, method = "maximum")
+        return(list(dist_fn = dist_fn, dist_deriv = maximum_dist_deriv_neg))
+    } else {
         stop("Unsupported distance")
     }
 }
@@ -147,8 +151,8 @@ make_dist_fns <- function(dist_fn, dist_deriv) {
 #' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
-#' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
-#' d(x,y)
+#'     p-vector with jth element equal to
+#'     \eqn{\frac{\partial}{\partial y_{j}} d(x,y)}
 euclidean_dist_deriv <- function(x, y) {
     if(sum((y - x)^2) == 0) {
         return(rep(0, length(y)))
@@ -162,8 +166,8 @@ euclidean_dist_deriv <- function(x, y) {
 #' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
-#' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
-#' d(x,y).
+#'     p-vector with jth element equal to
+#'     \eqn{\frac{\partial}{\partial y_{j}} d(x,y)}.
 manhattan_dist_deriv_pos <- function(x, y) {
     derivs = ifelse(y < x, -1, 1)
     return(derivs)
@@ -176,8 +180,8 @@ manhattan_dist_deriv_pos <- function(x, y) {
 #' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
-#' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
-#' d(x,y).
+#'     p-vector with jth element equal to
+#'     \eqn{\frac{\partial}{\partial y_{j}}} d(x,y).
 manhattan_dist_deriv_neg <- function(x, y) {
     derivs = ifelse(y <= x, -1, 1)
     return(derivs)
@@ -190,8 +194,8 @@ manhattan_dist_deriv_neg <- function(x, y) {
 #' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
-#' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
-#' d(x,y)
+#'     p-vector with jth element equal to
+#'     \eqn{\frac{\partial}{\partial y_{j}}} d(x,y)
 maximum_dist_deriv_pos <- function(x, y) {
     max_abs = max(abs(y - x))
     active_coordinates = which(abs(y - x) == max_abs)
@@ -211,8 +215,8 @@ maximum_dist_deriv_pos <- function(x, y) {
 #' @param y A p-vector.
 #'
 #' @return If x and y each have length p, the function returns a
-#' p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
-#' d(x,y)
+#'     p-vector with jth element equal to
+#'     \eqn{\frac{\partial}{\partial y_{j}}} d(x,y)
 maximum_dist_deriv_neg <- function(x, y) {
     max_abs = max(abs(y - x))
     active_coordinates = which(abs(y - x) == max_abs)
@@ -234,7 +238,7 @@ maximum_dist_deriv_neg <- function(x, y) {
 #'     distances between the rows of the matrix.
 #' @param dist_deriv Either NULL (if dist is a string describing one
 #'     of the supported distances) or a function that takes two
-#'     vectors and computes \frac{\partia}{\partial y_j}d(x,y).
+#'     vectors and computes \eqn{\frac{\partial}{\partial y_j}d(x,y)}.
 #' @param k The number of embedding dimensions.
 #' @param samples The samples to compute local biplot axes
 #'     at. Defaults to all of the original samples.
@@ -268,6 +272,12 @@ local_biplot <- function(X, dist, dist_deriv = NULL, k = 2,
 }
 
 #' Make a correlation biplot
+#'
+#' @param X The data matrix, samples in the rows.
+#' @param dist A function that takes a matrix and computes the
+#'     distance between the rows.
+#' @param plotting_axes The MDS embedding axes to plot.
+#' @importFrom stats cor
 #' @export
 correlation_biplot <- function(X, dist, plotting_axes = 1:2) {
     mds_matrices = make_mds_matrices(X, dist)

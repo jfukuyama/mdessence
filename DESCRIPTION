@@ -1,14 +1,18 @@
 Package: mdessence
 Title: Sensitivity analysis for multi-dimensional scaling
 Version: 0.0.0.9000
-Authors@R: person("Julia", "Fukuyama", email = "julia.fukuyama@gmail.com", role = c("aut", "cre"))
-Description: Sensitivity analysis for MDS
+Authors@R: person("Anon", "Anon", email = "anon@gmail.com", role = c("aut", "cre"))
+Description: Sensitivity analysis for MDS.
 Depends: R (>= 3.5.1)
 License: AGPL-3
 Encoding: UTF-8
 LazyData: true
 Suggests: 
-    testthat
+    testthat,
+    knitr
 Imports:
-    Matrix
-RoxygenNote: 6.1.1
+    shiny,
+    ggplot2
+RoxygenNote: 7.1.0
+VignetteBuilder:
+    knitr

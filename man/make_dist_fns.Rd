@@ -7,15 +7,15 @@
 make_dist_fns(dist_fn, dist_deriv)
 }
 \arguments{
-\item{dist_deriv}{Either NULL or a function.}
+\item{dist_fn}{Either a string or a function.}
 
-\item{dist}{Either a string or a function.}
+\item{dist_deriv}{Either NULL or a function.}
 }
 \value{
 A list containing two functions, dist_fn and
     dist_deriv. dist_fn takes a matrix and computes a distance
     between the rows. dist_deriv takes two vectors, x and y, and
-    computes \frac{\partial}{\partial y_j}d(x,y), j = 1,...,p.
+    computes \eqn{\frac{\partial}{\partial y_j}d(x,y)}, j = 1,...,p.
 }
 \description{
 Creates distance function and corresponding derivative function

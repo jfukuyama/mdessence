@@ -6,6 +6,14 @@
 \usage{
 correlation_biplot(X, dist, plotting_axes = 1:2)
 }
+\arguments{
+\item{X}{The data matrix, samples in the rows.}
+
+\item{dist}{A function that takes a matrix and computes the
+distance between the rows.}
+
+\item{plotting_axes}{The MDS embedding axes to plot.}
+}
 \description{
 Make a correlation biplot
 }

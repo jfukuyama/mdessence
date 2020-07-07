@@ -13,8 +13,8 @@ manhattan_dist_deriv_neg(x, y)
 }
 \value{
 If x and y each have length p, the function returns a
-p-vector with jth element equal to \frac{\partial}{\partial y_{j}}
-d(x,y).
+    p-vector with jth element equal to
+    \eqn{\frac{\partial}{\partial y_{j}}} d(x,y).
 }
 \description{
 Partial derivatives for Manhattan distance

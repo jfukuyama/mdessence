@@ -188,8 +188,8 @@ We plot the local biplot axes, again centering each set of local biplot axes at 
 ```{r}
 ggplot(sb_and_var_descriptions_wuf,
        aes(x = Embedding1, y = Embedding2,
-           xend = 50 * Axis1 + Embedding1,
-           yend = 50 * Axis2 + Embedding2,
+           xend = 30 * Axis1 + Embedding1,
+           yend = 30 * Axis2 + Embedding2,
            color = var_description)) +
     geom_segment() +
     geom_point(aes(shape = sample %in% group_a),

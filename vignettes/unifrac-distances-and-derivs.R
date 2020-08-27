@@ -10,17 +10,20 @@
 #' @return A p-vector giving the gradient.
 #' @export
 wuf_dist_deriv <- function(x, y, A, L) {
+    p = length(y)
     sy = sum(y)
     sx = sum(x)
     py = y / sy
     px = x / sx
     by = py %*% A
     bx = px %*% A
-    bp_deriv = as.vector((1 - by)) / sy
-    signs = ifelse(by > bx, 1, -1)
-    grad = A %*% as.vector((L * (bp_deriv * signs)))
+    Jh = sy^(-1) * (diag(rep(1, p)) + outer(py, rep(1, p)))
+    Jg = t(A)
+    Jf = matrix(ifelse(by >= bx, 1, -1) * L, nrow = 1)
+    grad = Jf %*% Jg %*% Jh
     return(as.vector(grad))
 }
+
 
 #' Weighted Unifrac distance
 #'
